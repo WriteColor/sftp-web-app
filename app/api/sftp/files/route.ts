@@ -1,11 +1,20 @@
-import { NextResponse } from "next/server"
-import { createClient } from "@/lib/supabase/server"
+import { type NextRequest, NextResponse } from "next/server"
+import { createServerClient } from "@/lib/supabase/server"
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    const supabase = await createClient()
+    const supabase = await createServerClient()
 
-    const { data, error } = await supabase.from("sftp_files").select("*").order("uploaded_at", { ascending: false })
+    const { searchParams } = new URL(request.url)
+    const uploadBatchId = searchParams.get("uploadBatchId")
+
+    let query = supabase.from("sftp_files").select("*").order("uploaded_at", { ascending: false })
+
+    if (uploadBatchId) {
+      query = query.eq("upload_batch_id", uploadBatchId)
+    }
+
+    const { data, error } = await query
 
     if (error) {
       console.error("[v0] Error fetching files:", error)

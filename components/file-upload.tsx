@@ -1,13 +1,17 @@
 "use client"
 
+import type React from "react"
+
 import { useState, useCallback } from "react"
 import { useDropzone } from "react-dropzone"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Progress } from "@/components/ui/progress"
-import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Upload, X, FileIcon, CheckCircle2, AlertCircle, Loader2 } from "lucide-react"
-import type { SFTPConfig } from "@/lib/types"
+import { Upload, X, FileIcon, Loader2, ZoomIn } from "lucide-react"
+import type { SFTPConfig, FileMetadataWithStatus } from "@/lib/types"
+import { toast } from "sonner"
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import Image from "next/image"
 
 const MAX_FILE_SIZE = 50 * 1024 * 1024 // 50MB
 const MAX_FILES = 20
@@ -19,51 +23,59 @@ interface FileWithPreview extends File {
 interface FileUploadProps {
   sftpConfig: SFTPConfig
   onUploadComplete: () => void
+  uploadBatchId?: string
+  existingFiles?: FileMetadataWithStatus[]
 }
 
-export function FileUpload({ sftpConfig, onUploadComplete }: FileUploadProps) {
+export function FileUpload({ sftpConfig, onUploadComplete, uploadBatchId, existingFiles = [] }: FileUploadProps) {
   const [files, setFiles] = useState<FileWithPreview[]>([])
   const [uploading, setUploading] = useState(false)
   const [uploadProgress, setUploadProgress] = useState(0)
-  const [uploadResult, setUploadResult] = useState<{ success: boolean; message: string; errors?: string[] } | null>(
-    null,
-  )
+  const [previewImage, setPreviewImage] = useState<{ src: string; name: string } | null>(null)
+  const [zoomLevel, setZoomLevel] = useState(1)
 
-  const onDrop = useCallback((acceptedFiles: File[]) => {
-    setUploadResult(null)
+  const onDrop = useCallback(
+    (acceptedFiles: File[], rejectedFiles: any[]) => {
+      // Validar cantidad total de archivos (existentes + nuevos + seleccionados)
+      const totalFiles = existingFiles.length + files.length + acceptedFiles.length
+      if (totalFiles > MAX_FILES) {
+        toast.error(`Límite alcanzado`, {
+          description: `Solo puedes tener un máximo de ${MAX_FILES} archivos. Actualmente tienes ${existingFiles.length + files.length} archivo(s).`,
+        })
+        return
+      }
 
-    // Validar cantidad de archivos
-    if (acceptedFiles.length > MAX_FILES) {
-      setUploadResult({
-        success: false,
-        message: `Solo puedes subir un máximo de ${MAX_FILES} archivos a la vez`,
-      })
-      return
-    }
+      // Validar tamaño de archivos
+      const oversizedFiles = acceptedFiles.filter((file) => file.size > MAX_FILE_SIZE)
+      if (oversizedFiles.length > 0) {
+        toast.error("Archivos demasiado grandes", {
+          description: `${oversizedFiles.length} archivo(s) exceden el tamaño máximo de 50MB`,
+        })
+        return
+      }
 
-    // Validar tamaño de archivos
-    const oversizedFiles = acceptedFiles.filter((file) => file.size > MAX_FILE_SIZE)
-    if (oversizedFiles.length > 0) {
-      setUploadResult({
-        success: false,
-        message: `Algunos archivos exceden el tamaño máximo de 50MB`,
-        errors: oversizedFiles.map((f) => `${f.name} (${(f.size / 1024 / 1024).toFixed(2)}MB)`),
-      })
-      return
-    }
-
-    // Agregar previews para imágenes
-    const filesWithPreviews = acceptedFiles.map((file) => {
-      if (file.type.startsWith("image/")) {
-        return Object.assign(file, {
-          preview: URL.createObjectURL(file),
+      // Mostrar errores de archivos rechazados
+      if (rejectedFiles.length > 0) {
+        toast.warning("Algunos archivos no se pudieron agregar", {
+          description: `${rejectedFiles.length} archivo(s) fueron rechazados`,
         })
       }
-      return file
-    })
 
-    setFiles(filesWithPreviews)
-  }, [])
+      // Agregar previews para imágenes
+      const filesWithPreviews = acceptedFiles.map((file) => {
+        if (file.type.startsWith("image/")) {
+          return Object.assign(file, {
+            preview: URL.createObjectURL(file),
+          })
+        }
+        return file
+      })
+
+      setFiles((prev) => [...prev, ...filesWithPreviews])
+      toast.success(`${acceptedFiles.length} archivo(s) agregado(s)`)
+    },
+    [files.length, existingFiles.length],
+  )
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
@@ -80,6 +92,7 @@ export function FileUpload({ sftpConfig, onUploadComplete }: FileUploadProps) {
       newFiles.splice(index, 1)
       return newFiles
     })
+    toast.info("Archivo eliminado de la lista")
   }
 
   const handleUpload = async () => {
@@ -87,7 +100,6 @@ export function FileUpload({ sftpConfig, onUploadComplete }: FileUploadProps) {
 
     setUploading(true)
     setUploadProgress(0)
-    setUploadResult(null)
 
     try {
       const formData = new FormData()
@@ -95,6 +107,9 @@ export function FileUpload({ sftpConfig, onUploadComplete }: FileUploadProps) {
         formData.append("files", file)
       })
       formData.append("config", JSON.stringify(sftpConfig))
+      if (uploadBatchId) {
+        formData.append("uploadBatchId", uploadBatchId)
+      }
 
       const response = await fetch("/api/sftp/upload", {
         method: "POST",
@@ -104,27 +119,46 @@ export function FileUpload({ sftpConfig, onUploadComplete }: FileUploadProps) {
       const data = await response.json()
 
       if (data.success) {
-        setUploadResult({
-          success: true,
-          message: `${data.files?.length || 0} archivo(s) subido(s) exitosamente`,
+        toast.success("Subida exitosa", {
+          description: `${data.files?.length || 0} archivo(s) subido(s) correctamente`,
         })
         setFiles([])
         onUploadComplete()
       } else {
-        setUploadResult({
-          success: false,
-          message: data.message || "Error al subir archivos",
-          errors: data.errors,
+        toast.error("Error al subir archivos", {
+          description: data.message || "Ocurrió un error durante la subida",
         })
       }
     } catch (error) {
-      setUploadResult({
-        success: false,
-        message: "Error al subir archivos al servidor",
+      toast.error("Error de conexión", {
+        description: "No se pudo conectar con el servidor",
       })
     } finally {
       setUploading(false)
       setUploadProgress(0)
+    }
+  }
+
+  const handleDeleteExisting = async (fileId: string) => {
+    try {
+      const response = await fetch(`/api/sftp/files/${fileId}`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ config: sftpConfig }),
+      })
+
+      const data = await response.json()
+
+      if (data.success) {
+        toast.success("Archivo eliminado del servidor")
+        onUploadComplete()
+      } else {
+        toast.error("Error al eliminar", {
+          description: data.message || "No se pudo eliminar el archivo",
+        })
+      }
+    } catch (err) {
+      toast.error("Error al eliminar archivo")
     }
   }
 
@@ -133,6 +167,25 @@ export function FileUpload({ sftpConfig, onUploadComplete }: FileUploadProps) {
     if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(2)} KB`
     return `${(bytes / 1024 / 1024).toFixed(2)} MB`
   }
+
+  const openPreview = (src: string, name: string) => {
+    setPreviewImage({ src, name })
+    setZoomLevel(1)
+  }
+
+  const handleWheel = (e: React.WheelEvent) => {
+    e.preventDefault()
+    setZoomLevel((prev) => {
+      const delta = e.deltaY > 0 ? -0.1 : 0.1
+      return Math.max(0.5, Math.min(3, prev + delta))
+    })
+  }
+
+  const toggleZoom = () => {
+    setZoomLevel((prev) => (prev === 1 ? 2 : 1))
+  }
+
+  const totalFiles = existingFiles.length + files.length
 
   return (
     <Card>
@@ -156,29 +209,88 @@ export function FileUpload({ sftpConfig, onUploadComplete }: FileUploadProps) {
           ) : (
             <div>
               <p className="text-sm text-muted-foreground mb-2">Arrastra archivos aquí o haz clic para seleccionar</p>
-              <p className="text-xs text-muted-foreground">Máximo {MAX_FILES} archivos, 50MB cada uno</p>
+              <p className="text-xs text-muted-foreground">
+                {totalFiles}/{MAX_FILES} archivos • Máximo 50MB cada uno
+              </p>
             </div>
           )}
         </div>
 
+        {existingFiles.length > 0 && (
+          <div className="space-y-2">
+            <h4 className="text-sm font-medium">Archivos en el servidor ({existingFiles.length})</h4>
+            <div className="space-y-2 max-h-64 overflow-y-auto">
+              {existingFiles.map((file) => (
+                <div
+                  key={file.id}
+                  className="flex items-center gap-3 p-3 border rounded-lg bg-green-50 dark:bg-green-950/20"
+                >
+                  {file.mime_type.startsWith("image/") ? (
+                    <div
+                      className="h-12 w-12 relative rounded overflow-hidden cursor-pointer hover:opacity-80 transition-opacity"
+                      onClick={() => openPreview(`/api/sftp/serve/${file.id}`, file.original_filename)}
+                    >
+                      <Image
+                        src={`/api/sftp/serve/${file.id}`}
+                        alt={file.original_filename}
+                        fill
+                        className="object-cover"
+                        sizes="48px"
+                      />
+                    </div>
+                  ) : (
+                    <FileIcon className="h-12 w-12 text-muted-foreground" />
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium truncate">{file.original_filename}</p>
+                    <p className="text-xs text-muted-foreground">{formatFileSize(file.file_size)} • En servidor</p>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => {
+                      if (confirm("¿Eliminar este archivo del servidor?")) {
+                        handleDeleteExisting(file.id!)
+                      }
+                    }}
+                    disabled={uploading}
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {files.length > 0 && (
           <div className="space-y-2">
-            <h4 className="text-sm font-medium">Archivos seleccionados ({files.length})</h4>
+            <h4 className="text-sm font-medium">Archivos pendientes de subir ({files.length})</h4>
             <div className="space-y-2 max-h-64 overflow-y-auto">
               {files.map((file, index) => (
-                <div key={index} className="flex items-center gap-3 p-3 border rounded-lg">
+                <div
+                  key={index}
+                  className="flex items-center gap-3 p-3 border rounded-lg bg-amber-50 dark:bg-amber-950/20"
+                >
                   {file.preview ? (
-                    <img
-                      src={file.preview || "/placeholder.svg"}
-                      alt={file.name}
-                      className="h-12 w-12 object-cover rounded"
-                    />
+                    <div
+                      className="h-12 w-12 relative rounded overflow-hidden cursor-pointer hover:opacity-80 transition-opacity"
+                      onClick={() => openPreview(file.preview!, file.name)}
+                    >
+                      <Image
+                        src={file.preview || "/placeholder.svg"}
+                        alt={file.name}
+                        fill
+                        className="object-cover"
+                        sizes="48px"
+                      />
+                    </div>
                   ) : (
                     <FileIcon className="h-12 w-12 text-muted-foreground" />
                   )}
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium truncate">{file.name}</p>
-                    <p className="text-xs text-muted-foreground">{formatFileSize(file.size)}</p>
+                    <p className="text-xs text-muted-foreground">{formatFileSize(file.size)} • Pendiente</p>
                   </div>
                   <Button variant="ghost" size="icon" onClick={() => removeFile(index)} disabled={uploading}>
                     <X className="h-4 w-4" />
@@ -199,28 +311,6 @@ export function FileUpload({ sftpConfig, onUploadComplete }: FileUploadProps) {
           </div>
         )}
 
-        {uploadResult && (
-          <Alert variant={uploadResult.success ? "default" : "destructive"}>
-            <div className="flex items-start gap-2">
-              {uploadResult.success ? (
-                <CheckCircle2 className="h-4 w-4 text-green-600 mt-0.5" />
-              ) : (
-                <AlertCircle className="h-4 w-4 mt-0.5" />
-              )}
-              <div className="flex-1">
-                <AlertDescription>{uploadResult.message}</AlertDescription>
-                {uploadResult.errors && uploadResult.errors.length > 0 && (
-                  <ul className="mt-2 text-xs space-y-1">
-                    {uploadResult.errors.map((error, i) => (
-                      <li key={i}>• {error}</li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-            </div>
-          </Alert>
-        )}
-
         <Button onClick={handleUpload} disabled={files.length === 0 || uploading} className="w-full">
           {uploading ? (
             <>
@@ -234,6 +324,47 @@ export function FileUpload({ sftpConfig, onUploadComplete }: FileUploadProps) {
             </>
           )}
         </Button>
+
+        <Dialog open={!!previewImage} onOpenChange={() => setPreviewImage(null)}>
+          <DialogContent className="max-w-4xl">
+            <DialogHeader>
+              <DialogTitle className="flex items-center justify-between">
+                <span className="truncate">{previewImage?.name}</span>
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <ZoomIn className="h-4 w-4" />
+                  <span>{Math.round(zoomLevel * 100)}%</span>
+                </div>
+              </DialogTitle>
+            </DialogHeader>
+            <div
+              className="relative w-full aspect-video overflow-auto cursor-zoom-in"
+              onWheel={handleWheel}
+              onClick={toggleZoom}
+            >
+              {previewImage && (
+                <div
+                  style={{
+                    transform: `scale(${zoomLevel})`,
+                    transformOrigin: "center",
+                    transition: "transform 0.2s ease-out",
+                  }}
+                  className="w-full h-full flex items-center justify-center"
+                >
+                  <Image
+                    src={previewImage.src || "/placeholder.svg"}
+                    alt={previewImage.name}
+                    fill
+                    className="object-contain"
+                    sizes="(max-width: 1024px) 100vw, 80vw"
+                  />
+                </div>
+              )}
+            </div>
+            <p className="text-xs text-center text-muted-foreground">
+              Haz clic o usa la rueda del ratón para hacer zoom
+            </p>
+          </DialogContent>
+        </Dialog>
       </CardContent>
     </Card>
   )

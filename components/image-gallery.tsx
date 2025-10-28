@@ -1,46 +1,47 @@
 "use client"
 
+import type React from "react"
+
 import { useState, useEffect } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Loader2, Download, Trash2, RefreshCw, ImageIcon } from "lucide-react"
+import { Loader2, Download, Trash2, RefreshCw, ImageIcon, ZoomIn } from "lucide-react"
 import type { FileMetadata, SFTPConfig } from "@/lib/types"
 import Image from "next/image"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { toast } from "sonner"
 
 interface ImageGalleryProps {
   sftpConfig: SFTPConfig
+  uploadBatchId?: string
 }
 
-export function ImageGallery({ sftpConfig }: ImageGalleryProps) {
+export function ImageGallery({ sftpConfig, uploadBatchId }: ImageGalleryProps) {
   const [files, setFiles] = useState<FileMetadata[]>([])
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
   const [selectedImage, setSelectedImage] = useState<FileMetadata | null>(null)
+  const [zoomLevel, setZoomLevel] = useState(1)
 
   const loadFiles = async () => {
     setLoading(true)
-    setError(null)
 
     try {
-      const response = await fetch("/api/sftp/files")
+      const url = uploadBatchId ? `/api/sftp/files?uploadBatchId=${uploadBatchId}` : "/api/sftp/files"
+
+      const response = await fetch(url)
       const data = await response.json()
 
       if (data.success) {
         setFiles(data.files || [])
       } else {
-        setError(data.message || "Error al cargar archivos")
+        toast.error("Error al cargar archivos", {
+          description: data.message || "No se pudieron cargar los archivos",
+        })
       }
     } catch (err) {
-      setError("Error al cargar la lista de archivos")
+      toast.error("Error de conexión", {
+        description: "No se pudo conectar con el servidor",
+      })
     } finally {
       setLoading(false)
     }
@@ -48,11 +49,9 @@ export function ImageGallery({ sftpConfig }: ImageGalleryProps) {
 
   useEffect(() => {
     loadFiles()
-  }, [])
+  }, [uploadBatchId])
 
   const handleDelete = async (fileId: string) => {
-    if (!confirm("¿Estás seguro de que quieres eliminar este archivo?")) return
-
     try {
       const response = await fetch(`/api/sftp/files/${fileId}`, {
         method: "DELETE",
@@ -64,12 +63,32 @@ export function ImageGallery({ sftpConfig }: ImageGalleryProps) {
 
       if (data.success) {
         setFiles((prev) => prev.filter((f) => f.id !== fileId))
+        toast.success("Archivo eliminado correctamente")
       } else {
-        alert(data.message || "Error al eliminar archivo")
+        toast.error("Error al eliminar", {
+          description: data.message || "No se pudo eliminar el archivo",
+        })
       }
     } catch (err) {
-      alert("Error al eliminar archivo")
+      toast.error("Error al eliminar archivo")
     }
+  }
+
+  const handleWheel = (e: React.WheelEvent) => {
+    e.preventDefault()
+    setZoomLevel((prev) => {
+      const delta = e.deltaY > 0 ? -0.1 : 0.1
+      return Math.max(0.5, Math.min(3, prev + delta))
+    })
+  }
+
+  const toggleZoom = () => {
+    setZoomLevel((prev) => (prev === 1 ? 2 : 1))
+  }
+
+  const openImage = (file: FileMetadata) => {
+    setSelectedImage(file)
+    setZoomLevel(1)
   }
 
   const formatFileSize = (bytes: number) => {
@@ -116,12 +135,6 @@ export function ImageGallery({ sftpConfig }: ImageGalleryProps) {
         </div>
       </CardHeader>
       <CardContent>
-        {error && (
-          <Alert variant="destructive" className="mb-4">
-            <AlertDescription>{error}</AlertDescription>
-          </Alert>
-        )}
-
         {files.length === 0 ? (
           <div className="text-center py-12">
             <ImageIcon className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
@@ -132,36 +145,18 @@ export function ImageGallery({ sftpConfig }: ImageGalleryProps) {
             {files.map((file) => (
               <div key={file.id} className="group relative border rounded-lg overflow-hidden bg-card">
                 {isImage(file.mime_type) ? (
-                  <Dialog>
-                    <DialogTrigger asChild>
-                      <div className="aspect-square relative cursor-pointer overflow-hidden bg-muted">
-                        <Image
-                          src={`/api/sftp/serve/${file.id}`}
-                          alt={file.original_filename}
-                          fill
-                          className="object-cover transition-transform group-hover:scale-105"
-                          sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
-                        />
-                      </div>
-                    </DialogTrigger>
-                    <DialogContent className="max-w-4xl">
-                      <DialogHeader>
-                        <DialogTitle>{file.original_filename}</DialogTitle>
-                        <DialogDescription>
-                          {formatFileSize(file.file_size)} • {formatDate(file.uploaded_at || "")}
-                        </DialogDescription>
-                      </DialogHeader>
-                      <div className="relative w-full aspect-video">
-                        <Image
-                          src={`/api/sftp/serve/${file.id}`}
-                          alt={file.original_filename}
-                          fill
-                          className="object-contain"
-                          sizes="(max-width: 1024px) 100vw, 80vw"
-                        />
-                      </div>
-                    </DialogContent>
-                  </Dialog>
+                  <div
+                    className="aspect-square relative cursor-pointer overflow-hidden bg-muted"
+                    onClick={() => openImage(file)}
+                  >
+                    <Image
+                      src={`/api/sftp/serve/${file.id}`}
+                      alt={file.original_filename}
+                      fill
+                      className="object-cover transition-transform group-hover:scale-105"
+                      sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
+                    />
+                  </div>
                 ) : (
                   <div className="aspect-square flex items-center justify-center bg-muted">
                     <ImageIcon className="h-12 w-12 text-muted-foreground" />
@@ -183,7 +178,15 @@ export function ImageGallery({ sftpConfig }: ImageGalleryProps) {
                         Descargar
                       </a>
                     </Button>
-                    <Button variant="destructive" size="sm" onClick={() => handleDelete(file.id!)}>
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      onClick={() => {
+                        if (confirm("¿Eliminar este archivo?")) {
+                          handleDelete(file.id!)
+                        }
+                      }}
+                    >
                       <Trash2 className="h-3 w-3" />
                     </Button>
                   </div>
@@ -192,6 +195,51 @@ export function ImageGallery({ sftpConfig }: ImageGalleryProps) {
             ))}
           </div>
         )}
+
+        <Dialog open={!!selectedImage} onOpenChange={() => setSelectedImage(null)}>
+          <DialogContent className="max-w-4xl">
+            <DialogHeader>
+              <DialogTitle className="flex items-center justify-between">
+                <span className="truncate">{selectedImage?.original_filename}</span>
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <ZoomIn className="h-4 w-4" />
+                  <span>{Math.round(zoomLevel * 100)}%</span>
+                </div>
+              </DialogTitle>
+              <DialogDescription>
+                {selectedImage &&
+                  `${formatFileSize(selectedImage.file_size)} • ${formatDate(selectedImage.uploaded_at || "")}`}
+              </DialogDescription>
+            </DialogHeader>
+            <div
+              className="relative w-full aspect-video overflow-auto cursor-zoom-in"
+              onWheel={handleWheel}
+              onClick={toggleZoom}
+            >
+              {selectedImage && (
+                <div
+                  style={{
+                    transform: `scale(${zoomLevel})`,
+                    transformOrigin: "center",
+                    transition: "transform 0.2s ease-out",
+                  }}
+                  className="w-full h-full flex items-center justify-center"
+                >
+                  <Image
+                    src={`/api/sftp/serve/${selectedImage.id}`}
+                    alt={selectedImage.original_filename}
+                    fill
+                    className="object-contain"
+                    sizes="(max-width: 1024px) 100vw, 80vw"
+                  />
+                </div>
+              )}
+            </div>
+            <p className="text-xs text-center text-muted-foreground">
+              Haz clic o usa la rueda del ratón para hacer zoom
+            </p>
+          </DialogContent>
+        </Dialog>
       </CardContent>
     </Card>
   )

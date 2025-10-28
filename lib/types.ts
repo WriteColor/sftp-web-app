@@ -22,3 +22,14 @@ export interface UploadResponse {
   files?: FileMetadata[]
   errors?: string[]
 }
+
+export interface UploadBatch {
+  id?: string
+  name: string
+  created_at?: string
+  file_count?: number
+}
+
+export interface FileMetadataWithStatus extends FileMetadata {
+  status?: "uploaded" | "pending"
+}

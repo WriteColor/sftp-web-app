@@ -5,9 +5,9 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Alert, AlertDescription } from "@/components/ui/alert"
-import { CheckCircle2, XCircle, Loader2 } from "lucide-react"
+import { Loader2 } from "lucide-react"
 import type { SFTPConfig } from "@/lib/types"
+import { toast } from "sonner"
 
 interface SFTPConfigFormProps {
   onConfigSaved: (config: SFTPConfig) => void
@@ -24,11 +24,16 @@ export function SFTPConfigForm({ onConfigSaved, initialConfig }: SFTPConfigFormP
     },
   )
   const [testing, setTesting] = useState(false)
-  const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null)
 
   const handleTest = async () => {
+    if (!config.host || !config.username || !config.password) {
+      toast.warning("Campos incompletos", {
+        description: "Por favor completa todos los campos requeridos",
+      })
+      return
+    }
+
     setTesting(true)
-    setTestResult(null)
 
     try {
       const response = await fetch("/api/sftp/test", {
@@ -40,13 +45,19 @@ export function SFTPConfigForm({ onConfigSaved, initialConfig }: SFTPConfigFormP
       const data = await response.json()
 
       if (data.success) {
-        setTestResult({ success: true, message: "Conexión exitosa al servidor SFTP" })
+        toast.success("Conexión exitosa", {
+          description: "La configuración SFTP ha sido guardada correctamente",
+        })
         onConfigSaved(config)
       } else {
-        setTestResult({ success: false, message: data.message || "Error al conectar con el servidor SFTP" })
+        toast.error("Error de conexión", {
+          description: data.message || "No se pudo conectar con el servidor SFTP",
+        })
       }
     } catch (error) {
-      setTestResult({ success: false, message: "Error al probar la conexión" })
+      toast.error("Error al probar la conexión", {
+        description: "Verifica tu conexión a internet e intenta nuevamente",
+      })
     } finally {
       setTesting(false)
     }
@@ -100,19 +111,6 @@ export function SFTPConfigForm({ onConfigSaved, initialConfig }: SFTPConfigFormP
             onChange={(e) => setConfig({ ...config, password: e.target.value })}
           />
         </div>
-
-        {testResult && (
-          <Alert variant={testResult.success ? "default" : "destructive"}>
-            <div className="flex items-center gap-2">
-              {testResult.success ? (
-                <CheckCircle2 className="h-4 w-4 text-green-600" />
-              ) : (
-                <XCircle className="h-4 w-4" />
-              )}
-              <AlertDescription>{testResult.message}</AlertDescription>
-            </div>
-          </Alert>
-        )}
 
         <Button
           onClick={handleTest}

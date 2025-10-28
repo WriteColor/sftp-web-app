@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import { createSFTPConnection } from "@/lib/sftp-client"
 import type { SFTPConfig } from "@/lib/types"
+import { getServerSFTPConfig } from "@/lib/sftp-config"
 
 export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   let sftp: any = null
@@ -9,11 +10,11 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
   try {
     const { id } = await params
     const body = await request.json()
-    const config: SFTPConfig = body.config
-
-    if (!config) {
-      return NextResponse.json({ success: false, message: "Configuración SFTP no proporcionada" }, { status: 400 })
-    }
+    
+    // Usar la configuración del servidor, o combinarla con la del cliente
+    const config: SFTPConfig = body.config 
+      ? getServerSFTPConfig(body.config)
+      : getServerSFTPConfig()
 
     const supabase = await createClient()
 

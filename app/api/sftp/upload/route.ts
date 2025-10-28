@@ -1,11 +1,12 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { createSFTPConnection } from "@/lib/sftp-client"
-import { createClient } from "@/lib/supabase/server"
+import { createServerClient } from "@/lib/supabase/server"
 import type { SFTPConfig, FileMetadata } from "@/lib/types"
 import { randomBytes } from "crypto"
 import path from "path"
 import { validateSFTPConfig, sanitizeFilename } from "@/lib/validation"
 import { rateLimit } from "@/lib/rate-limit"
+import { getServerSFTPConfig } from "@/lib/sftp-config"
 
 const MAX_FILE_SIZE = 50 * 1024 * 1024 // 50MB
 const MAX_FILES = 20
@@ -25,12 +26,18 @@ export async function POST(request: NextRequest) {
     const formData = await request.formData()
     const files = formData.getAll("files") as File[]
     const configStr = formData.get("config") as string
+    const uploadBatchId = formData.get("uploadBatchId") as string | null
 
-    if (!configStr) {
-      return NextResponse.json({ success: false, message: "Configuración SFTP no proporcionada" }, { status: 400 })
+    let config: SFTPConfig
+
+    if (configStr) {
+      const partialConfig: Partial<SFTPConfig> = JSON.parse(configStr)
+      // Completar la configuración con las variables de entorno del servidor
+      config = getServerSFTPConfig(partialConfig)
+    } else {
+      // Usar solo la configuración del servidor
+      config = getServerSFTPConfig()
     }
-
-    const config: SFTPConfig = JSON.parse(configStr)
 
     if (!validateSFTPConfig(config)) {
       return NextResponse.json({ success: false, message: "Configuración SFTP inválida" }, { status: 400 })
@@ -72,7 +79,7 @@ export async function POST(request: NextRequest) {
     // Subir archivos y guardar metadata
     const uploadedFiles: FileMetadata[] = []
     const errors: string[] = []
-    const supabase = await createClient()
+    const supabase = await createServerClient()
 
     for (const file of files) {
       try {
@@ -90,13 +97,16 @@ export async function POST(request: NextRequest) {
         // Subir archivo al servidor SFTP
         await sftp.put(buffer, remotePath)
 
-        // Guardar metadata en la base de datos
-        const metadata: FileMetadata = {
+        const metadata: any = {
           filename: uniqueName,
           original_filename: sanitizedName,
           file_path: remotePath,
           file_size: file.size,
           mime_type: file.type || "application/octet-stream",
+        }
+
+        if (uploadBatchId) {
+          metadata.upload_batch_id = uploadBatchId
         }
 
         const { data, error } = await supabase.from("sftp_files").insert(metadata).select().single()
