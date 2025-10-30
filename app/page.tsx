@@ -18,9 +18,9 @@ export default function Home() {
   // Configuración SFTP (solo información de visualización, no se usa la contraseña)
   // La autenticación real se hace en el servidor con las variables de entorno
   const sftpConfig: SFTPConfig = {
-    host: process.env.NEXT_PUBLIC_SFTP_HOST || "access-5017844927.webspace-host.com",
+    host: process.env.NEXT_PUBLIC_SFTP_HOST || "",
     port: parseInt(process.env.NEXT_PUBLIC_SFTP_PORT || "22"),
-    username: process.env.NEXT_PUBLIC_SFTP_USERNAME || "a999815",
+    username: process.env.NEXT_PUBLIC_SFTP_USERNAME || "",
     password: "", // Se completa en el servidor
   }
 
@@ -34,7 +34,7 @@ export default function Home() {
 
   return (
     <>
-      <Toaster position="top-right" richColors closeButton />
+      <Toaster position="top-right" richColors /*closeButton*/ />
 
       <main className="min-h-screen bg-background">
         <div className="container mx-auto py-8 px-4 max-w-7xl">

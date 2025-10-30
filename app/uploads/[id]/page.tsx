@@ -23,7 +23,7 @@ export default function UploadDetailPage({ params }: { params: Promise<{ id: str
     host: process.env.NEXT_PUBLIC_SFTP_HOST || "access-5017844927.webspace-host.com",
     port: parseInt(process.env.NEXT_PUBLIC_SFTP_PORT || "22"),
     username: process.env.NEXT_PUBLIC_SFTP_USERNAME || "a999815",
-    password: "", // Se completa en el servidor
+    password: "Fam_Mercado!2007", // Se completa en el servidor
   }
 
   const loadUploadData = async () => {

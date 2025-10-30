@@ -1,4 +1,4 @@
-import type { SFTPConfig } from "./types"
+import type { SFTPConfig } from "../types"
 
 /**
  * Obtiene la configuración SFTP completa usando las variables de entorno del servidor

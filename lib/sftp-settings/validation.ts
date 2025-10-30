@@ -1,4 +1,4 @@
-import type { SFTPConfig } from "./types"
+import type { SFTPConfig } from "../types"
 
 export function validateSFTPConfig(config: any): config is SFTPConfig {
   if (!config || typeof config !== "object") return false

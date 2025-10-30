@@ -1,8 +1,8 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
-import { createSFTPConnection } from "@/lib/sftp-client"
+import { createSFTPConnection } from "@/lib/sftp-settings/sftp-client"
 import type { SFTPConfig } from "@/lib/types"
-import { getServerSFTPConfig } from "@/lib/sftp-config"
+import { getServerSFTPConfig } from "@/lib/sftp-settings/sftp-config"
 
 export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   let sftp: any = null

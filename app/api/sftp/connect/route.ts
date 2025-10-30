@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { testSFTPConnection } from "@/lib/sftp-client"
+import { testSFTPConnection } from "@/lib/sftp-settings/sftp-client"
 import type { SFTPConfig } from "@/lib/types"
 
 export async function POST(request: NextRequest) {

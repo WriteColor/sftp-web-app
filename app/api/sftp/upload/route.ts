@@ -1,12 +1,12 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { createSFTPConnection } from "@/lib/sftp-client"
+import { createSFTPConnection } from "@/lib/sftp-settings/sftp-client"
 import { createServerClient } from "@/lib/supabase/server"
 import type { SFTPConfig, FileMetadata } from "@/lib/types"
 import { randomBytes } from "crypto"
 import path from "path"
-import { validateSFTPConfig, sanitizeFilename } from "@/lib/validation"
-import { rateLimit } from "@/lib/rate-limit"
-import { getServerSFTPConfig } from "@/lib/sftp-config"
+import { validateSFTPConfig, sanitizeFilename } from "@/lib/sftp-settings/validation"
+import { rateLimit } from "@/lib/sftp-settings/rate-limit"
+import { getServerSFTPConfig } from "@/lib/sftp-settings/sftp-config"
 
 const MAX_FILE_SIZE = 50 * 1024 * 1024 // 50MB
 const MAX_FILES = 20

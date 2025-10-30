@@ -1,17 +1,17 @@
 "use client"
 
 import type React from "react"
-
 import { useState, useCallback } from "react"
 import { useDropzone } from "react-dropzone"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Progress } from "@/components/ui/progress"
-import { Upload, X, FileIcon, Loader2, ZoomIn } from "lucide-react"
+import { Upload, X, FileIcon, Loader2 } from "lucide-react"
 import type { SFTPConfig, FileMetadataWithStatus } from "@/lib/types"
 import { toast } from "sonner"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import Image from "next/image"
+import { ImageZoomViewer } from "./image-zoom-viewer"
 
 const MAX_FILE_SIZE = 50 * 1024 * 1024 // 50MB
 const MAX_FILES = 20
@@ -326,43 +326,13 @@ export function FileUpload({ sftpConfig, onUploadComplete, uploadBatchId, existi
         </Button>
 
         <Dialog open={!!previewImage} onOpenChange={() => setPreviewImage(null)}>
-          <DialogContent className="max-w-4xl">
-            <DialogHeader>
-              <DialogTitle className="flex items-center justify-between">
-                <span className="truncate">{previewImage?.name}</span>
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <ZoomIn className="h-4 w-4" />
-                  <span>{Math.round(zoomLevel * 100)}%</span>
-                </div>
-              </DialogTitle>
+          <DialogContent className="max-w-[95vw] max-h-[95vh] p-0">
+            <DialogHeader className="p-6 pb-0">
+              <DialogTitle className="truncate">{previewImage?.name}</DialogTitle>
             </DialogHeader>
-            <div
-              className="relative w-full aspect-video overflow-auto cursor-zoom-in"
-              onWheel={handleWheel}
-              onClick={toggleZoom}
-            >
-              {previewImage && (
-                <div
-                  style={{
-                    transform: `scale(${zoomLevel})`,
-                    transformOrigin: "center",
-                    transition: "transform 0.2s ease-out",
-                  }}
-                  className="w-full h-full flex items-center justify-center"
-                >
-                  <Image
-                    src={previewImage.src || "/placeholder.svg"}
-                    alt={previewImage.name}
-                    fill
-                    className="object-contain"
-                    sizes="(max-width: 1024px) 100vw, 80vw"
-                  />
-                </div>
-              )}
+            <div className="h-[calc(95vh-100px)]">
+              {previewImage && <ImageZoomViewer src={previewImage.src || "/placeholder.svg"} alt={previewImage.name} />}
             </div>
-            <p className="text-xs text-center text-muted-foreground">
-              Haz clic o usa la rueda del ratón para hacer zoom
-            </p>
           </DialogContent>
         </Dialog>
       </CardContent>

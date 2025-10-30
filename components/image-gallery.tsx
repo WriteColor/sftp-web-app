@@ -1,15 +1,15 @@
 "use client"
 
 import type React from "react"
-
 import { useState, useEffect } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Loader2, Download, Trash2, RefreshCw, ImageIcon, ZoomIn } from "lucide-react"
+import { Loader2, Download, Trash2, RefreshCw, ImageIcon } from "lucide-react"
 import type { FileMetadata, SFTPConfig } from "@/lib/types"
 import Image from "next/image"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { toast } from "sonner"
+import { ImageZoomViewer } from "./image-zoom-viewer"
 
 interface ImageGalleryProps {
   sftpConfig: SFTPConfig
@@ -197,47 +197,19 @@ export function ImageGallery({ sftpConfig, uploadBatchId }: ImageGalleryProps) {
         )}
 
         <Dialog open={!!selectedImage} onOpenChange={() => setSelectedImage(null)}>
-          <DialogContent className="max-w-4xl">
-            <DialogHeader>
-              <DialogTitle className="flex items-center justify-between">
-                <span className="truncate">{selectedImage?.original_filename}</span>
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <ZoomIn className="h-4 w-4" />
-                  <span>{Math.round(zoomLevel * 100)}%</span>
-                </div>
-              </DialogTitle>
+          <DialogContent className="max-w-[95vw] max-h-[95vh] p-0">
+            <DialogHeader className="p-6 pb-0">
+              <DialogTitle className="truncate">{selectedImage?.original_filename}</DialogTitle>
               <DialogDescription>
                 {selectedImage &&
                   `${formatFileSize(selectedImage.file_size)} • ${formatDate(selectedImage.uploaded_at || "")}`}
               </DialogDescription>
             </DialogHeader>
-            <div
-              className="relative w-full aspect-video overflow-auto cursor-zoom-in"
-              onWheel={handleWheel}
-              onClick={toggleZoom}
-            >
+            <div className="h-[calc(95vh-120px)]">
               {selectedImage && (
-                <div
-                  style={{
-                    transform: `scale(${zoomLevel})`,
-                    transformOrigin: "center",
-                    transition: "transform 0.2s ease-out",
-                  }}
-                  className="w-full h-full flex items-center justify-center"
-                >
-                  <Image
-                    src={`/api/sftp/serve/${selectedImage.id}`}
-                    alt={selectedImage.original_filename}
-                    fill
-                    className="object-contain"
-                    sizes="(max-width: 1024px) 100vw, 80vw"
-                  />
-                </div>
+                <ImageZoomViewer src={`/api/sftp/serve/${selectedImage.id}`} alt={selectedImage.original_filename} />
               )}
             </div>
-            <p className="text-xs text-center text-muted-foreground">
-              Haz clic o usa la rueda del ratón para hacer zoom
-            </p>
           </DialogContent>
         </Dialog>
       </CardContent>

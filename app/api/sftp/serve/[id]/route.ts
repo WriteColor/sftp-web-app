@@ -1,8 +1,8 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
-import { createSFTPConnection } from "@/lib/sftp-client"
+import { createSFTPConnection } from "@/lib/sftp-settings/sftp-client"
 import type { SFTPConfig } from "@/lib/types"
-import { rateLimit } from "@/lib/rate-limit"
+import { rateLimit } from "@/lib/sftp-settings/rate-limit"
 
 // Obtener configuración SFTP desde variables de entorno
 async function getSFTPConfig(): Promise<SFTPConfig | null> {
