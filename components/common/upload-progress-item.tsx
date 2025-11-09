@@ -19,10 +19,11 @@ interface UploadProgressItemProps {
 
 export function UploadProgressItem({ file, onRemove, isUploading, fileSize }: UploadProgressItemProps) {
   const [progress, setProgress] = useState(0)
-  const [status, setStatus] = useState<"pending" | "uploading" | "success" | "error">("pending")
+  const [status, setStatus] = useState<"pending" | "sanitizing" | "ready" | "uploading" | "success" | "error">("pending")
   const [errorMessage, setErrorMessage] = useState("")
   const [previewUrl, setPreviewUrl] = useState<string>("")
   const [openPreview, setOpenPreview] = useState(false)
+  const [statusMessage, setStatusMessage] = useState("")
 
   useEffect(() => {
     if (file.type.startsWith("image/") || file.type.startsWith("video/")) {
@@ -37,6 +38,9 @@ export function UploadProgressItem({ file, onRemove, isUploading, fileSize }: Up
       if (event.detail.fileName === file.name) {
         setProgress(event.detail.progress)
         setStatus(event.detail.status)
+        if (event.detail.statusMessage) {
+          setStatusMessage(event.detail.statusMessage)
+        }
         if (event.detail.error) {
           setErrorMessage(event.detail.error)
         }
@@ -61,14 +65,18 @@ export function UploadProgressItem({ file, onRemove, isUploading, fileSize }: Up
   const getStatusColor = () => {
     if (status === "error") return "bg-red-500"
     if (status === "success") return "bg-green-500"
+    if (status === "sanitizing") return "bg-purple-500"
+    if (status === "ready") return "bg-blue-400/40"
     return "bg-blue-500"
   }
 
   const getStatusText = () => {
     if (status === "error") return `Error: ${errorMessage}`
-    if (status === "success") return "Subido"
-    if (status === "uploading") return `${progress}%`
-    return "Pendiente"
+    if (status === "success") return "✓ Subido correctamente"
+    if (status === "sanitizing") return `Sanitizando... ${progress}%`
+    if (status === "ready") return "✓ Listo para subir"
+    if (status === "uploading") return `Subiendo archivo... ${progress}%`
+    return "⏳ Pendiente"
   }
 
   const handlePreviewClick = () => {
@@ -125,33 +133,41 @@ export function UploadProgressItem({ file, onRemove, isUploading, fileSize }: Up
 
           <div className="space-y-1.5">
             <div className="flex items-center gap-2">
-              <div className="flex-1">
-                <Progress
-                  value={progress}
-                  className="h-2"
-                  style={
-                    {
-                      "--progress-color":
-                        status === "error"
-                          ? "rgb(239, 68, 68)"
-                          : status === "success"
-                            ? "rgb(34, 197, 94)"
-                            : "rgb(59, 130, 246)",
-                    } as React.CSSProperties
-                  }
-                />
+              <div className="flex-1 relative">
+                {/* Contenedor de la barra de progreso con texto superpuesto */}
+                <div className="relative h-7 w-full overflow-hidden rounded-md bg-muted">
+                  {/* Barra de progreso */}
+                  <div
+                    className={`h-full transition-all duration-300 ${
+                      status === "error"
+                        ? "bg-red-500"
+                        : status === "success"
+                          ? "bg-green-500"
+                          : status === "sanitizing"
+                            ? "bg-purple-500"
+                            : status === "ready"
+                              ? "bg-blue-400/40"
+                              : "bg-blue-500"
+                    }`}
+                    style={{ width: status === "ready" ? "100%" : `${progress}%` }}
+                  />
+                  {/* Texto superpuesto con mejor contraste */}
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <span
+                      className={`text-xs font-bold ${
+                        status === "ready"
+                          ? "text-foreground"
+                          : "text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]"
+                      }`}
+                      style={{
+                        textShadow: status === "ready" ? "none" : "0 1px 3px rgba(0,0,0,0.9), 0 0 8px rgba(0,0,0,0.5)",
+                      }}
+                    >
+                      {getStatusText()}
+                    </span>
+                  </div>
+                </div>
               </div>
-              <span
-                className={`text-xs font-semibold whitespace-nowrap px-2 py-1 rounded ${
-                  status === "error"
-                    ? "text-red-700 dark:text-red-400 bg-red-100 dark:bg-red-950"
-                    : status === "success"
-                      ? "text-green-700 dark:text-green-400 bg-green-100 dark:bg-green-950"
-                      : "text-blue-700 dark:text-blue-400 bg-blue-100 dark:bg-blue-950"
-                }`}
-              >
-                {getStatusText()}
-              </span>
             </div>
           </div>
         </div>

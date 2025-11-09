@@ -26,8 +26,8 @@ export function GifViewer({ src, alt }: GifViewerProps) {
   return (
     <div className="relative w-full h-full flex flex-col bg-background">
       {/* Toolbar - simplified for GIFs (no zoom) */}
-      <div className="absolute top-4 right-4 z-10 flex gap-2 bg-background/80 backdrop-blur-sm rounded-lg p-2 shadow-lg">
-        <Button variant="ghost" size="icon" asChild title="Descargar">
+      <div className="absolute right-4 z-10 flex gap-2 bg-background/80 backdrop-blur-sm rounded-lg p-2 shadow-lg">
+        <Button className="dark:text-white" variant="ghost" size="icon" asChild title="Descargar">
           <a href={src} download={alt}>
             <Download className="h-4 w-4" />
           </a>

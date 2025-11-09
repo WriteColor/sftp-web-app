@@ -138,20 +138,20 @@ export function ImageZoomViewer({ src, alt, onClose }: ImageZoomViewerProps) {
   return (
     <div className="relative w-full h-full flex flex-col bg-background">
       {/* Toolbar */}
-      <div className="absolute top-4 right-4 z-10 flex gap-2 bg-background/80 backdrop-blur-sm rounded-lg p-2 shadow-lg">
-        <Button variant="ghost" size="icon" onClick={zoomOut} disabled={zoomLevel <= 1} title="Alejar">
+      <div className="absolute right-1 z-10 flex gap-2 bg-background/80 backdrop-blur-sm rounded-lg p-2 shadow-lg">
+        <Button className="dark:text-white" variant="ghost" size="icon" onClick={zoomOut} disabled={zoomLevel <= 1} title="Alejar">
           <ZoomOut className="h-4 w-4" />
         </Button>
         <div className="flex items-center px-3 text-sm font-medium min-w-[60px] justify-center">
           {Math.round(zoomLevel * 100)}%
         </div>
-        <Button variant="ghost" size="icon" onClick={zoomIn} disabled={zoomLevel >= 5} title="Acercar">
+        <Button className="dark:text-white" variant="ghost" size="icon" onClick={zoomIn} disabled={zoomLevel >= 5} title="Acercar">
           <ZoomIn className="h-4 w-4" />
         </Button>
-        <Button variant="ghost" size="icon" onClick={resetZoom} title="Reiniciar">
+        <Button className="dark:text-white" variant="ghost" size="icon" onClick={resetZoom} title="Reiniciar">
           <RotateCw className="h-4 w-4" />
         </Button>
-        <Button variant="ghost" size="icon" asChild title="Descargar">
+        <Button className="dark:text-white" variant="ghost" size="icon" asChild title="Descargar">
           <a href={src} download={alt}>
             <Download className="h-4 w-4" />
           </a>

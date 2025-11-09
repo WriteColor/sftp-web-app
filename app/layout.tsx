@@ -41,9 +41,9 @@ export default function RootLayout({
       </head>
       <body className={`font-sans antialiased`}>
         <header className="border-b bg-background sticky top-0 z-40">
-          <div className="container mx-auto px-4 max-w-7xl flex items-center justify-between h-16">
+          <div className="container mx-auto px-3 sm:px-4 max-w-7xl flex items-center justify-between h-14 sm:h-16">
             <div />
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1 sm:gap-2">
               <Button variant="outline" size="icon" asChild>
                 <a 
                   href="https://github.com/WriteColor/sftp-web-app" 

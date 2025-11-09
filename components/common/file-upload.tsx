@@ -11,6 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import Image from "next/image"
 import { MediaViewer } from "../view/media-viewer"
 import { UploadProgressItem } from "./upload-progress-item"
+import { sanitizeFile } from "@/lib/file-sanitizer"
 
 const MAX_FILE_SIZE = 50 * 1024 * 1024 // 50MB
 const MAX_FILES = 20
@@ -34,7 +35,7 @@ export function FileUpload({ sftpConfig, onUploadComplete, uploadBatchId, existi
   const uploadingFilesRef = useRef<Map<string, boolean>>(new Map())
 
   const onDrop = useCallback(
-    (acceptedFiles: File[], rejectedFiles: any[]) => {
+    async (acceptedFiles: File[], rejectedFiles: any[]) => {
       const totalFiles = existingFiles.length + files.length + acceptedFiles.length
       if (totalFiles > MAX_FILES) {
         toast.warning(`Límite alcanzado`, {
@@ -57,7 +58,8 @@ export function FileUpload({ sftpConfig, onUploadComplete, uploadBatchId, existi
         })
       }
 
-      const filesWithPreviews = acceptedFiles.map((file) => {
+      // Primero agregar los archivos para que se muestren las barras de progreso
+      const initialFiles = acceptedFiles.map((file) => {
         if (file.type.startsWith("image/") || file.type.startsWith("video/")) {
           return Object.assign(file, {
             preview: URL.createObjectURL(file),
@@ -66,8 +68,31 @@ export function FileUpload({ sftpConfig, onUploadComplete, uploadBatchId, existi
         return file
       })
 
-      setFiles((prev) => [...prev, ...filesWithPreviews])
-      toast.success(`${acceptedFiles.length} archivo(s) agregado(s)`)
+      setFiles((prev) => [...prev, ...initialFiles])
+
+      // Sanitizar archivos para eliminar metadatos (el progreso se muestra en las barras individuales)
+      const sanitizedFiles = await Promise.all(
+        acceptedFiles.map(async (file, index) => {
+          try {
+            const sanitized = await sanitizeFile(file)
+            // Actualizar el archivo en el estado con el archivo sanitizado
+            setFiles((prev) => {
+              const newFiles = [...prev]
+              const fileIndex = newFiles.findIndex(f => f.name === file.name && f.size === file.size)
+              if (fileIndex !== -1) {
+                newFiles[fileIndex] = sanitized
+              }
+              return newFiles
+            })
+            return sanitized
+          } catch (error) {
+            console.error(`Error sanitizando ${file.name}:`, error)
+            return file // Si falla, usar el archivo original
+          }
+        })
+      )
+
+      toast.success(`${acceptedFiles.length} archivo(s) procesado(s) correctamente`)
     },
     [files.length, existingFiles.length],
   )
@@ -98,6 +123,18 @@ export function FileUpload({ sftpConfig, onUploadComplete, uploadBatchId, existi
 
   const uploadFileWithProgress = (file: File): Promise<boolean> => {
     return new Promise((resolve) => {
+      // Emitir evento de inicio de subida
+      window.dispatchEvent(
+        new CustomEvent("fileProgress", {
+          detail: {
+            fileName: file.name,
+            progress: 0,
+            status: "uploading",
+            statusMessage: "Iniciando subida...",
+          },
+        }),
+      )
+
       const xhr = new XMLHttpRequest()
 
       xhr.upload.addEventListener("progress", (e) => {
@@ -109,6 +146,7 @@ export function FileUpload({ sftpConfig, onUploadComplete, uploadBatchId, existi
                 fileName: file.name,
                 progress,
                 status: "uploading",
+                statusMessage: `Subiendo... ${progress}%`,
               },
             }),
           )
@@ -206,6 +244,9 @@ export function FileUpload({ sftpConfig, onUploadComplete, uploadBatchId, existi
 
     setUploading(true)
     uploadingFilesRef.current.clear()
+
+    // Pequeña pausa para que se vea la transición de sanitizado a subida
+    await new Promise(resolve => setTimeout(resolve, 300))
 
     try {
       const sortedFiles = getSortedFiles()
@@ -309,9 +350,8 @@ export function FileUpload({ sftpConfig, onUploadComplete, uploadBatchId, existi
       <CardContent className="space-y-4">
         <div
           {...getRootProps()}
-          className={`border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-colors ${
-            isDragActive ? "border-primary bg-primary/5" : "border-border hover:border-primary/50"
-          }`}
+          className={`border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-colors ${isDragActive ? "border-primary bg-primary/5" : "border-border hover:border-primary/50"
+            }`}
         >
           <input {...getInputProps()} />
           <Upload className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
@@ -406,7 +446,6 @@ export function FileUpload({ sftpConfig, onUploadComplete, uploadBatchId, existi
           {uploading ? (
             <>
               <LineSpinner size="16" stroke="2" speed="1" className="mr-2" />
-              Subiendo...
             </>
           ) : (
             <>

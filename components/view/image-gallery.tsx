@@ -99,6 +99,13 @@ export function ImageGallery({ sftpConfig, uploadBatchId }: ImageGalleryProps) {
 
       if (data.success) {
         setFiles((prev) => prev.filter((f) => f.id !== fileId))
+        // Actualizar el estado de selección eliminando el archivo del conjunto
+        setSelectedIds((prev) => {
+          const newSet = new Set(prev)
+          newSet.delete(fileId)
+          setHasSelection(newSet.size > 0)
+          return newSet
+        })
         toast.success("Archivo eliminado correctamente")
       } else {
         toast.error("Error al eliminar", {
