@@ -60,19 +60,19 @@ export function TextFileViewer({ src, filename }: TextFileViewerProps) {
   return (
     <div className="relative w-full h-full flex flex-col bg-background">
       {/* Toolbar */}
-      <div className="absolute right-9.5 z-10 flex gap-2 bg-background/80 backdrop-blur-sm rounded-tl-lg rounded-bl-lg p-2 shadow-lg">
+      <div className="absolute right-9.5 z-10 flex gap-2 bg-background/80 backdrop-blur-sm rounded-bl-lg p-2 shadow-lg">
         <Button variant="ghost" size="icon" onClick={handleCopy} title="Copiar contenido">
-          <Copy className="h-4 w-4" />
+          <Copy className="h-4 w-4 dark:text-white" />
         </Button>
         <Button variant="ghost" size="icon" asChild title="Descargar">
           <a href={src} download={filename}>
-            <Download className="h-4 w-4" />
+            <Download className="h-4 w-4 dark:text-white" />
           </a>
         </Button>
       </div>
 
       {/* Text content - scrollable with proper formatting */}
-      <div className="flex-1 overflow-auto p-6 pt-16">
+      <div className="flex-1 overflow-auto p-6 pt-0">
         <pre className="font-mono text-xs whitespace-pre-wrap wrap-break-words text-foreground bg-muted p-4 rounded-lg">
           {content}
         </pre>

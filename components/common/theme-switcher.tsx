@@ -66,28 +66,28 @@ export function ThemeSwitcher() {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="outline" size="icon" className="relative transition-colors duration-200 bg-transparent">
-          {theme === "light" && <Sun className={`h-4 w-4 ${isDarkMode ? "text-white" : "text-black"}`} />}
-          {theme === "dark" && <Moon className={`h-4 w-4 ${isDarkMode ? "text-white" : "text-black"}`} />}
-          {theme === "system" && <Monitor className={`h-4 w-4 ${isDarkMode ? "text-white" : "text-black"}`} />}
+        <Button variant="outline" size="icon" className="relative transition-colors duration-200 bg-transparent group">
+          {theme === "light" && <Sun className="h-4 w-4 text-black group-hover:text-white dark:text-white" />}
+          {theme === "dark" && <Moon className="h-4 w-4 text-black group-hover:text-white dark:text-white" />}
+          {theme === "system" && <Monitor className="h-4 w-4 text-black group-hover:text-white dark:text-white" />}
           <span className="sr-only">Cambiar tema</span>
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
-        <DropdownMenuItem onClick={() => handleThemeChange("light")} className="flex items-center gap-2">
-          <Sun className={`h-4 w-4 ${isDarkMode ? "text-white" : "text-black"}`} />
-          <span>Claro</span>
-          {theme === "light" && <span className="ml-auto text-xs">✓</span>}
+        <DropdownMenuItem onClick={() => handleThemeChange("light")} className="flex items-center gap-2 group">
+          <Sun className="h-4 w-4 text-black group-hover:text-white dark:text-white" />
+          <span className="text-black group-hover:text-white dark:text-white">Claro</span>
+          {theme === "light" && <span className="ml-auto text-xs text-black group-hover:text-white dark:text-white">✓</span>}
         </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => handleThemeChange("dark")} className="flex items-center gap-2">
-          <Moon className={`h-4 w-4 ${isDarkMode ? "text-white" : "text-black"}`} />
-          <span>Oscuro</span>
-          {theme === "dark" && <span className="ml-auto text-xs">✓</span>}
+        <DropdownMenuItem onClick={() => handleThemeChange("dark")} className="flex items-center gap-2 group">
+          <Moon className="h-4 w-4 text-black group-hover:text-white dark:text-white" />
+          <span className="text-black group-hover:text-white dark:text-white">Oscuro</span>
+          {theme === "dark" && <span className="ml-auto text-xs text-black group-hover:text-white dark:text-white">✓</span>}
         </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => handleThemeChange("system")} className="flex items-center gap-2">
-          <Monitor className={`h-4 w-4 ${isDarkMode ? "text-white" : "text-black"}`} />
-          <span>Sistema</span>
-          {theme === "system" && <span className="ml-auto text-xs">✓</span>}
+        <DropdownMenuItem onClick={() => handleThemeChange("system")} className="flex items-center gap-2 group">
+          <Monitor className="h-4 w-4 text-black group-hover:text-white dark:text-white" />
+          <span className="text-black group-hover:text-white dark:text-white">Sistema</span>
+          {theme === "system" && <span className="ml-auto text-xs text-black group-hover:text-white dark:text-white">✓</span>}
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

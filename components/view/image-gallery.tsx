@@ -263,19 +263,22 @@ export function ImageGallery({ sftpConfig, uploadBatchId }: ImageGalleryProps) {
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => setSelectedIds(new Set())}
+                    onClick={() => {
+                      setSelectedIds(new Set())
+                      setHasSelection(false)
+                    }}
                     className="gap-2"
                   >
                     Limpiar selección
                   </Button>
                 </>
               )}
-              <Button 
-                variant="outline" 
-                size="icon" 
-                onClick={loadFiles} 
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={loadFiles}
                 disabled={isRefreshing}
-                className="border-border bg-transparent"
+                className="border-border"
               >
                 {isRefreshing ? (
                   <LineSpinner size="20" stroke="3" speed="1" />
@@ -286,7 +289,8 @@ export function ImageGallery({ sftpConfig, uploadBatchId }: ImageGalleryProps) {
                     height="16"
                     viewBox="0 0 24 24"
                     fill="none"
-                    stroke="currentColor"
+                    className="stroke-black group-hover:stroke-white dark:stroke-white"
+
                     strokeWidth="2"
                     strokeLinecap="round"
                     strokeLinejoin="round"
@@ -324,14 +328,13 @@ export function ImageGallery({ sftpConfig, uploadBatchId }: ImageGalleryProps) {
                   >
                     <button
                       onClick={(e) => toggleSelection(file.id!, e)}
-                      className={`flex items-center justify-center w-5 h-5 rounded border-2 transition-all ${
-                        selectedIds.has(file.id!)
+                      className={`flex items-center justify-center w-5 h-5 rounded border-2 transition-all ${selectedIds.has(file.id!)
                           ? "bg-primary border-primary shadow-md"
                           : "bg-background border-muted-foreground/30 hover:border-primary"
-                      }`}
+                        }`}
                     >
                       {selectedIds.has(file.id!) && (
-                        <Check className="h-3.5 w-3.5 text-primary-foreground" />
+                        <Check className="h-3.5 w-3.5 text-white" />
                       )}
                     </button>
                   </div>
@@ -392,14 +395,14 @@ export function ImageGallery({ sftpConfig, uploadBatchId }: ImageGalleryProps) {
                       <Button
                         variant="outline"
                         size="sm"
-                        className="flex-1 bg-transparent border-border hover:border-primary/50 text-xs"
+                        className="flex-1 border-border text-xs"
                         asChild
                       >
                         <a
                           href={cachedUrls.get(file.id!) || `/api/sftp/serve/${file.id}?download=true`}
                           download={file.original_filename}
                         >
-                          <Download className="h-3.5 w-3.5 mr-1.5" />
+                          {/* <Download className="h-3.5 w-3.5 mr-1.5 hover:text-white" /> */}
                           Descargar
                         </a>
                       </Button>

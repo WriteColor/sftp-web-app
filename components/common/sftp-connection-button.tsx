@@ -97,17 +97,17 @@ export function SFTPConnectionButton({ onConnected }: SFTPConnectionButtonProps)
               </>
             ) : (
               <>
-                <XCircle className="h-5 w-5 text-muted-foreground" />
-                <span className="text-sm font-medium text-muted-foreground">Desconectado</span>
+                <XCircle className="h-5 w-5 text-red-500" />
+                <span className="text-sm font-medium">Desconectado</span>
               </>
             )}
           </div>
           {isConnected ? (
-            <Button onClick={handleDisconnect} variant="outline" size="sm">
+            <Button className="hover:text-white" onClick={handleDisconnect} variant="outline" size="sm">
               Desconectar
             </Button>
           ) : (
-            <Button onClick={handleConnect} disabled={isConnecting} size="sm">
+            <Button className="hover:text-white text-white" onClick={handleConnect} disabled={isConnecting} size="sm">
               {isConnecting ? (
                 <>
                   <LineSpinner size="16" stroke="2" speed="1" className="mr-2" />

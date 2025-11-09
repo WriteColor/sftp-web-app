@@ -385,7 +385,7 @@ export function FileUpload({ sftpConfig, onUploadComplete, uploadBatchId, existi
 
         {files.length > 0 && (
           <div className="space-y-2">
-            <h4 className="text-sm font-medium">
+            <h4 className="text-sm dark:text-white font-medium">
               {uploading ? "Subiendo" : "Archivos pendientes de subir"} ({files.length})
             </h4>
             <div className="space-y-2 max-h-96 overflow-y-auto">
@@ -410,8 +410,8 @@ export function FileUpload({ sftpConfig, onUploadComplete, uploadBatchId, existi
             </>
           ) : (
             <>
-              <Upload className="mr-2 h-4 w-4" />
-              Subir {files.length} archivo(s)
+              <Upload className="mr-2 h-4 w-4 dark:text-white" />
+              <span className="dark:text-white">Subir {files.length} archivo(s)</span>
             </>
           )}
         </Button>
