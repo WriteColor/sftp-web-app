@@ -1,143 +1,196 @@
-# Cliente SFTP Web
+# 📁 Cliente SFTP Web
 
-Aplicación web completa para gestionar archivos en servidores SFTP con interfaz moderna y segura.
+> Aplicación web moderna para gestionar y compartir archivos en servidores SFTP con total seguridad y privacidad.
 
-## Características
+[![Next.js](https://img.shields.io/badge/Next.js-16-black?style=flat&logo=next.js)](https://nextjs.org/)
+[![React](https://img.shields.io/badge/React-18-blue?style=flat&logo=react)](https://reactjs.org/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5-blue?style=flat&logo=typescript)](https://www.typescriptlang.org/)
+[![Tailwind CSS](https://img.shields.io/badge/Tailwind-4-38bdf8?style=flat&logo=tailwind-css)](https://tailwindcss.com/)
 
-- **Configuración SFTP**: Interfaz para configurar credenciales del servidor SFTP con validación en tiempo real
-- **Subida de Archivos**: 
-  - Drag & drop para subir archivos
-  - Validación de tamaño (máx. 50MB por archivo)
-  - Límite de 20 archivos simultáneos
-  - Previsualizaciones de imágenes
-- **Galería de Imágenes**:
-  - Grid responsivo con optimización de imágenes
-  - Vista previa en modal
-  - Descarga de archivos
-  - Eliminación de archivos
-- **Seguridad**:
-  - Rate limiting para prevenir abuso
-  - Validación de tipos de archivo
-  - Sanitización de nombres de archivo
-  - Row Level Security (RLS) en base de datos
-  - Headers de seguridad en respuestas
+---
 
-## Tecnologías
+## ✨ Características Principales
 
-- **Framework**: Next.js 16 con App Router
-- **Base de Datos**: Supabase (PostgreSQL)
-- **SFTP**: ssh2-sftp-client
-- **UI**: shadcn/ui + Tailwind CSS v4
-- **Validación**: Validación personalizada + sanitización
-- **Optimización**: Next.js Image para imágenes optimizadas
+### 🔐 Privacidad y Seguridad
+- **Sanitización automática de archivos**: Elimina metadatos sensibles (GPS, EXIF, fechas, información de dispositivo) antes de subir
+- **Eliminación de scripts ocultos**: Protección contra código malicioso en imágenes
+- **Conexión segura**: Conexión directa al servidor SFTP con credenciales protegidas
 
-## Instalación
+### 📤 Subida de Archivos
+- **Arrastrar y soltar**: Interfaz intuitiva para agregar archivos
+- **Vista previa en tiempo real**: Previsualización de imágenes, videos y archivos de texto
+- **Progreso detallado**: Barra de progreso que muestra sanitización y subida
+- **Soporte múltiple**: Sube hasta 20 archivos a la vez (máx. 50MB cada uno)
 
-1. Clona el repositorio:
-\`\`\`bash
-git clone <repository-url>
-cd sftp-web-app
-\`\`\`
+### 🖼️ Galería Inteligente
+- **Visualización de medios**: Compatible con imágenes, videos, GIFs y documentos
+- **Selección múltiple**: Selecciona y elimina varios archivos a la vez
+- **Descarga directa**: Descarga tus archivos con un clic
+- **Diseño responsivo**: Perfectamente adaptado a móviles, tablets y escritorio
 
-2. Instala las dependencias:
-\`\`\`bash
-npm install
-\`\`\`
+### ⚡ Experiencia de Usuario
+- **Auto-conexión**: Conexión automática al servidor configurado
+- **Modo oscuro/claro**: Cambia entre temas según tu preferencia
+- **Notificaciones**: Alertas visuales claras sobre el estado de tus acciones
+- **Interfaz moderna**: Diseño limpio y profesional
 
-3. Configura las variables de entorno:
-\`\`\`bash
-cp .env.example .env.local
-\`\`\`
+---
 
-Edita `.env.local` con tus credenciales de Supabase y SFTP.
+## 🚀 Inicio Rápido
 
-4. Ejecuta el script SQL para crear la tabla:
-\`\`\`bash
-# Ejecuta el contenido de scripts/001_create_files_table.sql en tu base de datos Supabase
-\`\`\`
+### 📋 Requisitos Previos
 
-5. Inicia el servidor de desarrollo:
-\`\`\`bash
-npm run dev
-\`\`\`
+- Node.js 18+ o Bun
+- Una cuenta de [Supabase](https://supabase.com) (gratuita)
+- Acceso a un servidor SFTP
 
-6. Abre [http://localhost:3000](http://localhost:3000) en tu navegador.
+### 🔧 Instalación
 
-## Configuración de Supabase
+1. **Clona el repositorio**
+   \`\`\`bash
+   git clone https://github.com/WriteColor/sftp-web-app.git
+   cd sftp-web-app
+   \`\`\`
 
-1. Crea un proyecto en [Supabase](https://supabase.com)
-2. Ejecuta el script SQL en `scripts/001_create_files_table.sql` en el SQL Editor
-3. Copia las credenciales de tu proyecto a `.env.local`
+2. **Instala las dependencias**
+   \`\`\`bash
+   npm install
+   # o con bun
+   bun install
+   \`\`\`
 
-## Configuración del Servidor SFTP
+3. **Configura las variables de entorno**
+   
+   Crea un archivo `.env.local` en la raíz del proyecto:
+   \`\`\`env
+   # Supabase
+   NEXT_PUBLIC_SUPABASE_URL=tu_supabase_url
+   NEXT_PUBLIC_SUPABASE_ANON_KEY=tu_supabase_anon_key
 
-### Variables de Entorno (Recomendado para Producción)
+   # SFTP (Servidor)
+   NEXT_PUBLIC_SFTP_HOST=tu_servidor_sftp
+   NEXT_PUBLIC_SFTP_PORT=22
+   NEXT_PUBLIC_SFTP_USERNAME=tu_usuario
+   SFTP_PASSWORD=tu_contraseña
+   \`\`\`
 
-Configura las variables de entorno `SFTP_HOST`, `SFTP_PORT`, `SFTP_USERNAME`, y `SFTP_PASSWORD` para que la aplicación pueda servir archivos automáticamente.
+4. **Configura la base de datos**
+   
+   En tu proyecto de Supabase, ejecuta los scripts SQL ubicados en `/scripts/`:
+   - `001_create_files_table.sql`
+   - `002_create_upload_batches_table.sql`
 
-### Configuración Manual (UI)
+5. **Inicia el servidor**
+   \`\`\`bash
+   npm run dev
+   # o con bun
+   bun dev
+   \`\`\`
 
-Los usuarios pueden ingresar sus propias credenciales SFTP directamente en la interfaz web en la pestaña "Configuración".
+6. **Abre tu navegador** en [http://localhost:3000](http://localhost:3000)
 
-## Estructura del Proyecto
+---
 
-\`\`\`
-├── app/
-│   ├── api/
-│   │   └── sftp/
-│   │       ├── test/          # Probar conexión SFTP
-│   │       ├── upload/        # Subir archivos
-│   │       ├── files/         # Listar y eliminar archivos
-│   │       └── serve/         # Servir archivos
-│   ├── layout.tsx
-│   ├── page.tsx               # Página principal con tabs
-│   └── globals.css
-├── components/
-│   ├── sftp-config-form.tsx   # Formulario de configuración
-│   ├── file-upload.tsx        # Componente de subida
-│   ├── image-gallery.tsx      # Galería de imágenes
-│   └── ui/                    # Componentes shadcn/ui
-├── lib/
-│   ├── supabase/              # Clientes Supabase
-│   ├── sftp-client.ts         # Cliente SFTP
-│   ├── types.ts               # Tipos TypeScript
-│   ├── validation.ts          # Validación y sanitización
-│   ├── rate-limit.ts          # Rate limiting
-│   └── encryption.ts          # Encriptación (opcional)
-└── scripts/
-    └── 001_create_files_table.sql  # Script de base de datos
-\`\`\`
+## 🎯 Cómo Usar
 
-## Seguridad
+1. **Conéctate al servidor**: La aplicación se conecta automáticamente usando las credenciales configuradas
+2. **Sube archivos**: Arrastra archivos o haz clic para seleccionarlos
+3. **Espera la sanitización**: Los archivos se limpian automáticamente eliminando metadatos sensibles
+4. **Sube al servidor**: Haz clic en "Subir archivos" y observa el progreso en tiempo real
+5. **Gestiona tu galería**: Visualiza, descarga o elimina archivos desde la galería
 
-- **Rate Limiting**: Límite de solicitudes por IP para prevenir abuso
-- **Validación de Entrada**: Validación estricta de configuración SFTP y archivos
-- **Sanitización**: Nombres de archivo sanitizados para prevenir path traversal
-- **RLS**: Row Level Security habilitado en Supabase
-- **Headers de Seguridad**: X-Content-Type-Options y otros headers de seguridad
-- **Validación de UUID**: Validación de IDs para prevenir inyección
+---
 
-## Limitaciones
+## 🛡️ Seguridad y Privacidad
 
-- Tamaño máximo por archivo: 50MB
-- Máximo de archivos simultáneos: 20
-- Rate limiting: 10 solicitudes por minuto para upload, 30 para servir archivos
+Esta aplicación prioriza tu privacidad eliminando automáticamente:
 
-## Mejoras Futuras
+- ✅ **Datos GPS y ubicación** de fotos
+- ✅ **Información EXIF** (cámara, modelo, configuración)
+- ✅ **Fechas originales** de creación y modificación
+- ✅ **Scripts y código oculto** en imágenes
+- ✅ **Metadatos de software** y dispositivos
 
-- [ ] Autenticación de usuarios con Supabase Auth
-- [ ] Encriptación de credenciales SFTP en base de datos
-- [ ] Soporte para múltiples configuraciones SFTP por usuario
-- [ ] Búsqueda y filtrado de archivos
-- [ ] Organización en carpetas
-- [ ] Compartir archivos con enlaces temporales
-- [ ] Compresión de imágenes antes de subir
-- [ ] Soporte para más tipos de archivos (videos, documentos)
+Los archivos se procesan **localmente en tu navegador** antes de subir, garantizando máxima privacidad.
 
-## Licencia
+---
 
-MIT
+## 🛠️ Tecnologías
 
-## Soporte
+Esta aplicación está construida con tecnologías modernas:
 
-Para problemas o preguntas, abre un issue en el repositorio.
+- **[Next.js 16](https://nextjs.org/)** - Framework React de última generación
+- **[React 18](https://reactjs.org/)** - Librería de interfaz de usuario
+- **[TypeScript](https://www.typescriptlang.org/)** - Tipado estático para JavaScript
+- **[Tailwind CSS 4](https://tailwindcss.com/)** - Framework CSS con sistema OKLCH
+- **[Supabase](https://supabase.com/)** - Base de datos PostgreSQL y almacenamiento
+- **[shadcn/ui](https://ui.shadcn.com/)** - Componentes de UI accesibles
+- **[ssh2-sftp-client](https://www.npmjs.com/package/ssh2-sftp-client)** - Cliente SFTP para Node.js
+
+---
+
+## 📊 Características Técnicas
+
+### Sanitización de Archivos
+- Procesamiento del lado del cliente usando Canvas API
+- Recodificación de imágenes sin metadatos
+- Eliminación de datos EXIF completos
+- Soporte para imágenes, videos y documentos
+
+### Gestión de Archivos
+- Selección múltiple con sincronización en tiempo real
+- Cache de medios para carga rápida
+- Previsualización de múltiples formatos
+- Sistema de progreso detallado (sanitización + subida)
+
+### Seguridad
+- Validación estricta de entradas
+- Limitación de velocidad (rate limiting)
+- Conexión SFTP segura
+- Headers de seguridad HTTP
+
+---
+
+## 📝 Limitaciones
+
+- **Tamaño máximo por archivo**: 50MB
+- **Archivos simultáneos**: Máximo 20 archivos a la vez
+- **Tipos de archivo**: Todos los tipos son soportados
+- **Procesamiento**: La sanitización se realiza en el navegador (requiere recursos del cliente)
+
+---
+
+## 🤝 Contribuir
+
+Las contribuciones son bienvenidas. Para cambios importantes:
+
+1. Haz fork del repositorio
+2. Crea una rama para tu función (`git checkout -b feature/AmazingFeature`)
+3. Commit tus cambios (`git commit -m 'Add some AmazingFeature'`)
+4. Push a la rama (`git push origin feature/AmazingFeature`)
+5. Abre un Pull Request
+
+---
+
+## 📄 Licencia
+
+Este proyecto está bajo la Licencia MIT. Consulta el archivo `LICENSE` para más detalles.
+
+---
+
+## 💬 Soporte
+
+¿Tienes preguntas o problemas? 
+
+- 📫 Abre un [issue](https://github.com/WriteColor/sftp-web-app/issues) en GitHub
+- ⭐ Si te gusta el proyecto, dale una estrella en GitHub
+
+---
+
+<div align="center">
+
+**Creado por [Write_Color](https://github.com/WriteColor)**
+
+Si este proyecto te fue útil, considera darle una ⭐
+
+</div>
