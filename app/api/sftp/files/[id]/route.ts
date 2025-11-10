@@ -3,12 +3,30 @@ import { createClient } from "@/lib/supabase/server"
 import { createSFTPConnection } from "@/lib/sftp-settings/sftp-client"
 import type { SFTPConfig } from "@/lib/types"
 import { getServerSFTPConfig } from "@/lib/sftp-settings/sftp-config"
+import { secureJsonResponse, validateContentType, isValidUUID } from "@/lib/security"
 
 export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   let sftp: any = null
 
   try {
     const { id } = await params
+
+    // Validar UUID
+    if (!isValidUUID(id)) {
+      return secureJsonResponse(
+        { success: false, message: "ID inválido" },
+        { status: 400 }
+      )
+    }
+
+    // Validar Content-Type
+    if (!validateContentType(request)) {
+      return secureJsonResponse(
+        { success: false, message: "Content-Type inválido" },
+        { status: 400 }
+      )
+    }
+
     const body = await request.json()
     
     // Usar la configuración del servidor, o combinarla con la del cliente
@@ -22,7 +40,10 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
     const { data: file, error: fetchError } = await supabase.from("sftp_files").select("*").eq("id", id).single()
 
     if (fetchError || !file) {
-      return NextResponse.json({ success: false, message: "Archivo no encontrado" }, { status: 404 })
+      return secureJsonResponse(
+        { success: false, message: "Archivo no encontrado" },
+        { status: 404 }
+      )
     }
 
     // Conectar al servidor SFTP y eliminar el archivo
@@ -35,10 +56,13 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
 
     if (deleteError) {
       console.error("[WC] Error deleting file record:", deleteError)
-      return NextResponse.json({ success: false, message: "Error al eliminar registro" }, { status: 500 })
+      return secureJsonResponse(
+        { success: false, message: "Error al eliminar registro" },
+        { status: 500 }
+      )
     }
 
-    return NextResponse.json({ success: true, message: "Archivo eliminado exitosamente" })
+    return secureJsonResponse({ success: true, message: "Archivo eliminado exitosamente" })
   } catch (error) {
     console.error("[WC] Error deleting file:", error)
 
@@ -50,7 +74,7 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
       }
     }
 
-    return NextResponse.json(
+    return secureJsonResponse(
       { success: false, message: error instanceof Error ? error.message : "Error al eliminar archivo" },
       { status: 500 },
     )

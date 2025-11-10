@@ -7,9 +7,14 @@ import path from "path"
 import { validateSFTPConfig, sanitizeFilename } from "@/lib/sftp-settings/validation"
 import { rateLimit } from "@/lib/sftp-settings/rate-limit"
 import { getServerSFTPConfig } from "@/lib/sftp-settings/sftp-config"
+import { secureJsonResponse, isValidUUID } from "@/lib/security"
 
 const MAX_FILE_SIZE = 50 * 1024 * 1024 // 50MB
 const MAX_FILES = 20
+const ALLOWED_MIME_TYPES = [
+  'image/', 'video/', 'audio/', 'text/', 'application/pdf',
+  'application/json', 'application/xml', 'application/zip'
+]
 
 export async function POST(request: NextRequest) {
   let sftp: any = null
@@ -17,9 +22,9 @@ export async function POST(request: NextRequest) {
   try {
     const ip = request.headers.get("x-forwarded-for") || request.headers.get("x-real-ip") || "unknown"
     if (!rateLimit(ip, 10, 60000)) {
-      return NextResponse.json(
+      return secureJsonResponse(
         { success: false, message: "Demasiadas solicitudes. Intenta más tarde." },
-        { status: 429 },
+        { status: 429 }
       )
     }
 
@@ -27,6 +32,14 @@ export async function POST(request: NextRequest) {
     const files = formData.getAll("files") as File[]
     const configStr = formData.get("config") as string
     const uploadBatchId = formData.get("uploadBatchId") as string | null
+
+    // Validar UUID del batch si existe
+    if (uploadBatchId && !isValidUUID(uploadBatchId)) {
+      return secureJsonResponse(
+        { success: false, message: "ID de lote inválido" },
+        { status: 400 }
+      )
+    }
 
     let config: SFTPConfig
 
@@ -40,28 +53,52 @@ export async function POST(request: NextRequest) {
     }
 
     if (!validateSFTPConfig(config)) {
-      return NextResponse.json({ success: false, message: "Configuración SFTP inválida" }, { status: 400 })
+      return secureJsonResponse(
+        { success: false, message: "Configuración SFTP inválida" },
+        { status: 400 }
+      )
     }
 
     // Validar cantidad de archivos
     if (files.length === 0) {
-      return NextResponse.json({ success: false, message: "No se proporcionaron archivos" }, { status: 400 })
+      return secureJsonResponse(
+        { success: false, message: "No se proporcionaron archivos" },
+        { status: 400 }
+      )
     }
 
     if (files.length > MAX_FILES) {
-      return NextResponse.json({ success: false, message: `Máximo ${MAX_FILES} archivos permitidos` }, { status: 400 })
+      return secureJsonResponse(
+        { success: false, message: `Máximo ${MAX_FILES} archivos permitidos` },
+        { status: 400 }
+      )
     }
 
     // Validar tamaño de archivos
     const oversizedFiles = files.filter((file) => file.size > MAX_FILE_SIZE)
     if (oversizedFiles.length > 0) {
-      return NextResponse.json(
+      return secureJsonResponse(
         {
           success: false,
           message: "Algunos archivos exceden el tamaño máximo",
           errors: oversizedFiles.map((f) => `${f.name} (${(f.size / 1024 / 1024).toFixed(2)}MB)`),
         },
-        { status: 400 },
+        { status: 400 }
+      )
+    }
+
+    // Validar tipos MIME (seguridad adicional)
+    const invalidFiles = files.filter(file => 
+      !ALLOWED_MIME_TYPES.some(allowed => file.type.startsWith(allowed))
+    )
+    if (invalidFiles.length > 0) {
+      return secureJsonResponse(
+        {
+          success: false,
+          message: "Algunos archivos tienen tipos no permitidos",
+          errors: invalidFiles.map(f => f.name)
+        },
+        { status: 400 }
       )
     }
 
@@ -69,7 +106,7 @@ export async function POST(request: NextRequest) {
     sftp = await createSFTPConnection(config)
 
     // Crear directorio de uploads si no existe
-    const uploadDir = "/uploads"
+    const uploadDir = "/uploads/sftp-web-app"
     try {
       await sftp.mkdir(uploadDir, true)
     } catch (error) {
@@ -127,17 +164,17 @@ export async function POST(request: NextRequest) {
     await sftp.end()
 
     if (uploadedFiles.length === 0) {
-      return NextResponse.json(
+      return secureJsonResponse(
         {
           success: false,
           message: "No se pudo subir ningún archivo",
           errors,
         },
-        { status: 500 },
+        { status: 500 }
       )
     }
 
-    return NextResponse.json({
+    return secureJsonResponse({
       success: true,
       message: `${uploadedFiles.length} archivo(s) subido(s) exitosamente`,
       files: uploadedFiles,
@@ -154,12 +191,12 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    return NextResponse.json(
+    return secureJsonResponse(
       {
         success: false,
         message: error instanceof Error ? error.message : "Error al subir archivos",
       },
-      { status: 500 },
+      { status: 500 }
     )
   }
 }

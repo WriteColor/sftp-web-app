@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { createServerClient } from "@/lib/supabase/server"
+import { secureJsonResponse, validateContentType, sanitizeString } from "@/lib/security"
 
 export async function GET() {
   try {
@@ -14,7 +15,10 @@ export async function GET() {
       .order("created_at", { ascending: false })
 
     if (error) {
-      return NextResponse.json({ success: false, message: error.message }, { status: 500 })
+      return secureJsonResponse(
+        { success: false, message: error.message },
+        { status: 500 }
+      )
     }
 
     // Formatear el conteo de archivos
@@ -23,30 +27,57 @@ export async function GET() {
       file_count: batch.file_count?.[0]?.count || 0,
     }))
 
-    return NextResponse.json({ success: true, batches: formattedBatches })
+    return secureJsonResponse({ success: true, batches: formattedBatches })
   } catch (error: any) {
-    return NextResponse.json({ success: false, message: error.message }, { status: 500 })
+    return secureJsonResponse(
+      { success: false, message: error.message },
+      { status: 500 }
+    )
   }
 }
 
 export async function POST(request: NextRequest) {
   try {
+    // Validar Content-Type
+    if (!validateContentType(request)) {
+      return secureJsonResponse(
+        { success: false, message: "Content-Type inválido" },
+        { status: 400 }
+      )
+    }
+
     const { name } = await request.json()
 
     if (!name || !name.trim()) {
-      return NextResponse.json({ success: false, message: "El nombre es requerido" }, { status: 400 })
+      return secureJsonResponse(
+        { success: false, message: "El nombre es requerido" },
+        { status: 400 }
+      )
     }
+
+    // Sanitizar el nombre para prevenir XSS
+    const sanitizedName = sanitizeString(name.trim())
 
     const supabase = await createServerClient()
 
-    const { data: batch, error } = await supabase.from("upload_batches").insert({ name: name.trim() }).select().single()
+    const { data: batch, error } = await supabase
+      .from("upload_batches")
+      .insert({ name: sanitizedName })
+      .select()
+      .single()
 
     if (error) {
-      return NextResponse.json({ success: false, message: error.message }, { status: 500 })
+      return secureJsonResponse(
+        { success: false, message: error.message },
+        { status: 500 }
+      )
     }
 
-    return NextResponse.json({ success: true, batch })
+    return secureJsonResponse({ success: true, batch })
   } catch (error: any) {
-    return NextResponse.json({ success: false, message: error.message }, { status: 500 })
+    return secureJsonResponse(
+      { success: false, message: error.message },
+      { status: 500 }
+    )
   }
 }
