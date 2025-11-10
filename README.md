@@ -26,14 +26,18 @@
 * **Arrastrar y soltar:** interfaz intuitiva para agregar archivos.
 * **Vista previa en tiempo real:** imágenes, videos y texto.
 * **Progreso detallado:** sanitización + subida.
-* **Soporte múltiple:** hasta 20 archivos simultáneos (máx. 50 MB cada uno).
+* **Soporte múltiple:** hasta 20 archivos simultáneos (máx. 150 MB cada uno).
+* **Streaming optimizado:** videos grandes se transmiten con range requests para carga progresiva.
 
 ### 🖼️ Galería inteligente
 
 * **Visualización multimedia:** imágenes, videos, GIFs y documentos.
+* **Caché inteligente:** archivos se cachean automáticamente para carga instantánea.
+* **Precarga automática:** imágenes y videos pequeños se precargan en segundo plano.
 * **Selección múltiple y eliminación masiva.**
 * **Descarga directa con un clic.**
 * **Diseño responsivo:** adaptado a móvil, tablet y escritorio.
+* **Notificaciones de carga:** aviso cuando archivos grandes tardan en cargar.
 
 ### ⚡ Experiencia de usuario
 
@@ -153,9 +157,12 @@ El sistema elimina:
 ### Gestión de archivos
 
 * Selección múltiple y sincronización en tiempo real
-* **Cache de medios** para carga rápida
-* **Previsualización dinámica**
+* **Cache API nativa** para almacenamiento persistente y rápido
+* **Doble caché:** Memoria RAM + Cache API para máxima velocidad
+* **Range requests:** Streaming eficiente de videos grandes
+* **Previsualización dinámica** con precarga inteligente
 * Sistema de **progreso detallado** (sanitización + subida)
+* **Notificaciones de carga lenta** cuando archivos tardan más de 7 segundos
 
 ### Seguridad
 
@@ -166,12 +173,14 @@ El sistema elimina:
 
 ---
 
-## ⚠️ Limitaciones
+## ⚠️ Limitaciones y consideraciones
 
-* 📁 Tamaño máximo por archivo: **50 MB** (configurable)
+* 📁 Tamaño máximo por archivo: **150 MB** (configurable)
 * 📦 Subidas simultáneas: **20 archivos** (configurable)
 * 🧩 Procesamiento local (consume recursos del cliente)
 * 💡 Todos los tipos de archivo son compatibles
+* ⏱️ La carga de archivos grandes depende de la velocidad de internet del usuario
+* 💾 El caché persiste entre sesiones para acceso ultra-rápido
 
 ---
 

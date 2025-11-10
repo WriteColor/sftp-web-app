@@ -9,10 +9,13 @@ interface MediaViewerProps {
   alt: string
   mimeType?: string
   fileId?: string
+  fileSize?: number
   onVideoCached?: (fileId: string, blobUrl: string) => void
+  onLoadStart?: (fileId: string) => void
+  onLoadEnd?: (fileId: string) => void
 }
 
-export function MediaViewer({ src, alt, mimeType, fileId, onVideoCached }: MediaViewerProps) {
+export function MediaViewer({ src, alt, mimeType, fileId, fileSize, onVideoCached, onLoadStart, onLoadEnd }: MediaViewerProps) {
   // Priorizar mimeType sobre extensión de archivo (importante para URLs blob)
   const isGif = mimeType === "image/gif" || (!mimeType && src.toLowerCase().endsWith(".gif"))
   const isAnimatedImage = 
@@ -40,7 +43,17 @@ export function MediaViewer({ src, alt, mimeType, fileId, onVideoCached }: Media
       ))
 
   if (isVideo) {
-    return <VideoViewer src={src} alt={alt} fileId={fileId} onCached={onVideoCached} />
+    return (
+      <VideoViewer 
+        src={src} 
+        alt={alt} 
+        fileId={fileId}
+        fileSize={fileSize}
+        onCached={onVideoCached}
+        onLoadStart={onLoadStart}
+        onLoadEnd={onLoadEnd}
+      />
+    )
   }
 
   if (isAnimatedImage) {
@@ -52,7 +65,15 @@ export function MediaViewer({ src, alt, mimeType, fileId, onVideoCached }: Media
   }
 
   if (isImage) {
-    return <ImageZoomViewer src={src || "/placeholder.svg"} alt={alt} />
+    return (
+      <ImageZoomViewer 
+        src={src || "/placeholder.svg"} 
+        alt={alt}
+        fileId={fileId}
+        onLoadStart={onLoadStart}
+        onLoadEnd={onLoadEnd}
+      />
+    )
   }
 
   // Fallback for unknown types

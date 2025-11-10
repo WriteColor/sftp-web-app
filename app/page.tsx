@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { SFTPConnectionButton } from "@/components/common/sftp-connection-button"
 import { FileUpload } from "@/components/common/file-upload"
 import { ImageGallery } from "@/components/view/image-gallery"
@@ -8,10 +8,12 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import type { SFTPConfig } from "@/lib/types"
 import { Upload, Images } from "lucide-react"
 import { Toaster } from "sonner"
+import { PageSkeleton } from "@/components/common/page-skeleton"
 
 export default function Home() {
   const [isConnected, setIsConnected] = useState(false)
   const [refreshGallery, setRefreshGallery] = useState(0)
+  const [isInitialLoading, setIsInitialLoading] = useState(true)
 
   const sftpConfig: SFTPConfig = {
     host: process.env.NEXT_PUBLIC_SFTP_HOST || "",
@@ -26,6 +28,25 @@ export default function Home() {
 
   const handleUploadComplete = () => {
     setRefreshGallery((prev) => prev + 1)
+  }
+
+  // Simular carga inicial
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setIsInitialLoading(false)
+    }, 800) // Pequeño delay para mejor UX
+
+    return () => clearTimeout(timer)
+  }, [])
+
+  // Mostrar skeleton durante la carga inicial
+  if (isInitialLoading) {
+    return (
+      <>
+        <Toaster position="top-right" richColors />
+        <PageSkeleton />
+      </>
+    )
   }
 
   return (

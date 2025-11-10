@@ -1,18 +1,23 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useCallback } from "react"
 import Image from "next/image"
 import { Play } from "lucide-react"
-import { LineSpinner } from "@/components/ui/line-spinner"
 import type { FileMetadata } from "@/lib/types"
+import { useImageStream } from "@/hooks/use-image-stream"
+import { useVideoStream } from "@/hooks/use-video-stream"
+import { FileCardSkeleton } from "@/components/file-card/file-card-skeleton"
 
 interface FileCardPreviewProps {
   file: FileMetadata
   cachedUrl?: string
   onClick?: () => void
+  onCacheReady?: (fileId: string, blobUrl: string) => void
+  onLoadStart?: (fileId: string) => void
+  onLoadEnd?: (fileId: string) => void
 }
 
-export function FileCardPreview({ file, cachedUrl, onClick }: FileCardPreviewProps) {
+export function FileCardPreview({ file, cachedUrl, onClick, onCacheReady, onLoadStart, onLoadEnd }: FileCardPreviewProps) {
   const [isLoading, setIsLoading] = useState(true)
   const [hasError, setHasError] = useState(false)
 
@@ -22,6 +27,43 @@ export function FileCardPreview({ file, cachedUrl, onClick }: FileCardPreviewPro
     file.mime_type === "image/webp" ||
     file.mime_type === "image/apng"
 
+  // Callbacks para el hook de streaming
+  const handleLoadStartInternal = useCallback(() => {
+    setIsLoading(true)
+    if (file.id && onLoadStart) onLoadStart(file.id)
+  }, [file.id, onLoadStart])
+
+  const handleLoadEndInternal = useCallback(() => {
+    setIsLoading(false)
+    if (file.id && onLoadEnd) onLoadEnd(file.id)
+  }, [file.id, onLoadEnd])
+
+  const handleCached = useCallback((fileId: string, blobUrl: string) => {
+    if (onCacheReady) onCacheReady(fileId, blobUrl)
+  }, [onCacheReady])
+
+  // Hook para streaming de imágenes
+  const imageStream = useImageStream({
+    fileId: file.id || '',
+    fileSize: file.file_size,
+    enabled: !isVideo,
+    cachedUrl,
+    onLoadStart: handleLoadStartInternal,
+    onLoadEnd: handleLoadEndInternal,
+    onCached: handleCached,
+  })
+
+  // Hook para streaming de videos
+  const videoStream = useVideoStream({
+    fileId: file.id || '',
+    fileSize: file.file_size,
+    enabled: isVideo,
+    onLoadStart: handleLoadStartInternal,
+    onLoadEnd: handleLoadEndInternal,
+    onCached: handleCached,
+  })
+
+  // Handlers para imagen/video
   const handleLoad = () => {
     setIsLoading(false)
     setHasError(false)
@@ -32,6 +74,10 @@ export function FileCardPreview({ file, cachedUrl, onClick }: FileCardPreviewPro
     setHasError(true)
   }
 
+  // Seleccionar URL según el tipo de medio
+  const mediaUrl = isVideo ? videoStream.url : imageStream.url
+  const finalUrl = mediaUrl || `/api/sftp/serve/${file.id}`
+
   return (
     <div
       className="aspect-square relative cursor-pointer overflow-hidden bg-muted group"
@@ -41,7 +87,7 @@ export function FileCardPreview({ file, cachedUrl, onClick }: FileCardPreviewPro
       {isVideo ? (
         <>
           <video
-            src={cachedUrl || `/api/sftp/serve/${file.id}`}
+            src={finalUrl}
             className={`w-full h-full object-cover transition-opacity duration-300 ${
               isLoading ? "opacity-0" : "opacity-100"
             }`}
@@ -62,7 +108,7 @@ export function FileCardPreview({ file, cachedUrl, onClick }: FileCardPreviewPro
       ) : (
         /* Image preview */
         <Image
-          src={cachedUrl || `/api/sftp/serve/${file.id}`}
+          src={finalUrl}
           alt={file.original_filename}
           fill
           className={`object-cover transition-all duration-300 group-hover:scale-110 ${
@@ -76,10 +122,10 @@ export function FileCardPreview({ file, cachedUrl, onClick }: FileCardPreviewPro
         />
       )}
 
-      {/* Loading spinner - Sobre todo el contenido */}
+      {/* Loading skeleton - Sobre todo el contenido */}
       {isLoading && (
-        <div className="absolute inset-0 flex items-center justify-center bg-muted z-20">
-          <LineSpinner size="md" color="primary" />
+        <div className="absolute inset-0 z-20">
+          <FileCardSkeleton />
         </div>
       )}
 

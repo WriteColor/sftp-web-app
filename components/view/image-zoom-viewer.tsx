@@ -11,9 +11,12 @@ interface ImageZoomViewerProps {
   src: string
   alt: string
   onClose?: () => void
+  fileId?: string
+  onLoadStart?: (fileId: string) => void
+  onLoadEnd?: (fileId: string) => void
 }
 
-export function ImageZoomViewer({ src, alt, onClose }: ImageZoomViewerProps) {
+export function ImageZoomViewer({ src, alt, onClose, fileId, onLoadStart, onLoadEnd }: ImageZoomViewerProps) {
   const [zoomLevel, setZoomLevel] = useState(1)
   const [position, setPosition] = useState({ x: 0, y: 0 })
   const [isDragging, setIsDragging] = useState(false)
@@ -40,16 +43,31 @@ export function ImageZoomViewer({ src, alt, onClose }: ImageZoomViewerProps) {
     setIsDragging(false)
     setIsLoading(true)
     setHasError(false)
-  }, [src])
+    
+    // Notificar inicio de carga
+    if (fileId && onLoadStart) {
+      onLoadStart(fileId)
+    }
+  }, [src, fileId, onLoadStart])
 
   const handleImageLoad = () => {
     setIsLoading(false)
     setHasError(false)
+    
+    // Notificar fin de carga
+    if (fileId && onLoadEnd) {
+      onLoadEnd(fileId)
+    }
   }
 
   const handleImageError = () => {
     setIsLoading(false)
     setHasError(true)
+    
+    // Notificar fin de carga (aunque haya error)
+    if (fileId && onLoadEnd) {
+      onLoadEnd(fileId)
+    }
   }
 
   const handleWheel = useCallback((e: WheelEvent) => {

@@ -13,9 +13,9 @@ import { MediaViewer } from "../view/media-viewer"
 import { UploadProgressItem } from "./upload-progress-item"
 import { sanitizeFile } from "@/lib/file-sanitizer"
 
-const MAX_FILE_SIZE = 50 * 1024 * 1024 // 50MB
+const MAX_FILE_SIZE = 150 * 1024 * 1024 // 150MB
 const MAX_FILES = 20
-const LIGHT_FILE_THRESHOLD = 15 * 1024 * 1024 // 15MB
+const LIGHT_FILE_THRESHOLD = 50 * 1024 * 1024 // 50MB (archivos menores se procesan más rápido)
 
 interface FileWithPreview extends File {
   preview?: string

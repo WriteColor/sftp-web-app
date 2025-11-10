@@ -73,7 +73,19 @@ export function SFTPConnectionButton({ onConnected }: SFTPConnectionButtonProps)
   }
 
   if (!hasCheckedConnection) {
-    return null
+    return (
+      <Card className="border-border/50">
+        <CardContent className="pt-6">
+          <div className="flex items-center gap-3">
+            <div className="h-10 w-10 rounded-full bg-muted animate-pulse" />
+            <div className="flex-1 space-y-2">
+              <div className="h-4 w-32 bg-muted animate-pulse rounded" />
+              <div className="h-3 w-48 bg-muted/70 animate-pulse rounded" />
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    )
   }
 
   return (

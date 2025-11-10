@@ -34,7 +34,23 @@ export function ImageGallery({ sftpConfig, uploadBatchId }: ImageGalleryProps) {
   const [isDeleting, setIsDeleting] = useState(false)
   const [hasSelection, setHasSelection] = useState(false)
   const [isRefreshing, setIsRefreshing] = useState(false)
+  const [loadingFiles, setLoadingFiles] = useState<Set<string>>(new Set())
+  const [slowLoadToastShown, setSlowLoadToastShown] = useState(false)
   const { getCachedFile, cacheFile } = useMediaCache()
+
+  // Callback para trackear inicio de carga
+  const handleFileLoadStart = useCallback((fileId: string) => {
+    setLoadingFiles(prev => new Set(prev).add(fileId))
+  }, [])
+
+  // Callback para trackear fin de carga
+  const handleFileLoadEnd = useCallback((fileId: string) => {
+    setLoadingFiles(prev => {
+      const newSet = new Set(prev)
+      newSet.delete(fileId)
+      return newSet
+    })
+  }, [])
 
   // Callback para cuando un video se cachea
   const handleVideoCached = useCallback((fileId: string, blobUrl: string) => {
@@ -43,8 +59,8 @@ export function ImageGallery({ sftpConfig, uploadBatchId }: ImageGalleryProps) {
       newMap.set(fileId, blobUrl)
       return newMap
     })
-    console.log('📹 Video cacheado y agregado a la galería:', fileId)
-  }, [])
+    handleFileLoadEnd(fileId)
+  }, [handleFileLoadEnd])
 
   const loadFiles = async () => {
     setLoading(true)
@@ -130,11 +146,44 @@ export function ImageGallery({ sftpConfig, uploadBatchId }: ImageGalleryProps) {
     } else {
       setTimeout(preloadCache, 500)
     }
+
+    // Cleanup: revocar URLs cuando el componente se desmonte
+    return () => {
+      cachedUrls.forEach(url => {
+        if (url.startsWith('blob:')) {
+          URL.revokeObjectURL(url)
+        }
+      })
+    }
   }, [files, getCachedFile])
 
   useEffect(() => {
     loadFiles()
   }, [uploadBatchId])
+
+  // Monitorear archivos con carga lenta
+  useEffect(() => {
+    if (loadingFiles.size === 0 || slowLoadToastShown) return
+
+    const timeoutId = setTimeout(() => {
+      if (loadingFiles.size > 0 && !slowLoadToastShown) {
+        setSlowLoadToastShown(true)
+        toast.info("Cargando archivos", {
+          description: `La carga puede tardar dependiendo de tu velocidad de internet. ${loadingFiles.size} archivo(s) pendiente(s).`,
+          duration: 5000,
+        })
+      }
+    }, 7000) // Mostrar después de 7 segundos
+
+    return () => clearTimeout(timeoutId)
+  }, [loadingFiles, slowLoadToastShown])
+
+  // Reiniciar toast cuando no haya archivos cargando
+  useEffect(() => {
+    if (loadingFiles.size === 0) {
+      setSlowLoadToastShown(false)
+    }
+  }, [loadingFiles])
 
   const handleDelete = async (fileId: string) => {
     setIsDeleting(true)
@@ -384,13 +433,13 @@ export function ImageGallery({ sftpConfig, uploadBatchId }: ImageGalleryProps) {
                   }}
                 >
                   <div
-                    className={`absolute top-3 left-3 z-10 transition-opacity ${hasSelection ? "opacity-100" : "opacity-0 group-hover:opacity-100"}`}
+                    className={`absolute top-3 left-3 z-30 transition-opacity ${hasSelection ? "opacity-100" : "opacity-0 group-hover:opacity-100"}`}
                   >
                     <button
                       onClick={(e) => toggleSelection(file.id!, e)}
-                      className={`flex items-center justify-center w-5 h-5 rounded border-2 transition-all ${selectedIds.has(file.id!)
-                          ? "bg-primary border-primary shadow-md"
-                          : "bg-background border-muted-foreground/30 hover:border-primary"
+                      className={`flex items-center justify-center w-5 h-5 rounded border-2 transition-all shadow-lg backdrop-blur-sm ${selectedIds.has(file.id!)
+                          ? "bg-primary border-primary"
+                          : "bg-background/90 border-muted-foreground/30 hover:border-primary hover:bg-background"
                         }`}
                     >
                       {selectedIds.has(file.id!) && (
@@ -404,6 +453,15 @@ export function ImageGallery({ sftpConfig, uploadBatchId }: ImageGalleryProps) {
                       file={file}
                       cachedUrl={cachedUrls.get(file.id!)}
                       onClick={() => openImage(file)}
+                      onCacheReady={(fileId, blobUrl) => {
+                        setCachedUrls(prev => {
+                          const newMap = new Map(prev)
+                          newMap.set(fileId, blobUrl)
+                          return newMap
+                        })
+                      }}
+                      onLoadStart={handleFileLoadStart}
+                      onLoadEnd={handleFileLoadEnd}
                     />
                   ) : (
                     <div
@@ -477,7 +535,10 @@ export function ImageGallery({ sftpConfig, uploadBatchId }: ImageGalleryProps) {
                     alt={selectedImage.original_filename}
                     mimeType={selectedImage.mime_type}
                     fileId={selectedImage.id}
+                    fileSize={selectedImage.file_size}
                     onVideoCached={handleVideoCached}
+                    onLoadStart={handleFileLoadStart}
+                    onLoadEnd={handleFileLoadEnd}
                   />
                 )}
               </div>

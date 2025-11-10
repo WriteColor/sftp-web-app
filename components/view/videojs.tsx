@@ -4,12 +4,19 @@ import { useEffect, useRef } from "react"
 import videojs from "video.js"
 import "video.js/dist/video-js.css"
 
-import "videojs-contrib-quality-levels"
-import "videojs-http-source-selector"
+// Importar plugins solo una vez
+let pluginsLoaded = false
 
 interface VideoJSProps {
   options: any
   onReady?: (player: any) => void
+}
+
+// Cargar plugins solo una vez en el cliente
+if (typeof window !== "undefined" && !pluginsLoaded) {
+  require("videojs-contrib-quality-levels")
+  require("videojs-http-source-selector")
+  pluginsLoaded = true
 }
 
 export default function VideoJS({ options, onReady }: VideoJSProps) {

@@ -59,11 +59,52 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     const buffer = await sftp.get(file.file_path)
     await sftp.end()
 
-    // Preparar headers con seguridad
+    const fileSize = buffer.length
+    const rangeHeader = request.headers.get("range")
+
+    // Preparar headers base
     const headers = new Headers()
     headers.set("Content-Type", file.mime_type)
-    headers.set("Cache-Control", "public, max-age=31536000, immutable")
     headers.set("X-Content-Type-Options", "nosniff")
+    headers.set("Accept-Ranges", "bytes")
+
+    // Si es video y hay range request, soportar streaming
+    const isVideo = file.mime_type?.startsWith("video/")
+    
+    if (isVideo && rangeHeader) {
+      // Parse range header (formato: "bytes=start-end")
+      const parts = rangeHeader.replace(/bytes=/, "").split("-")
+      const start = parseInt(parts[0], 10)
+      const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1
+      const chunkSize = end - start + 1
+
+      // Validar range
+      if (start >= fileSize || end >= fileSize) {
+        return new NextResponse("Range Not Satisfiable", { status: 416 })
+      }
+
+      // Headers para partial content
+      headers.set("Content-Range", `bytes ${start}-${end}/${fileSize}`)
+      headers.set("Content-Length", chunkSize.toString())
+      headers.set("Cache-Control", "public, max-age=3600") // 1 hora para chunks
+
+      if (download) {
+        headers.set("Content-Disposition", `attachment; filename="${file.original_filename}"`)
+      } else {
+        headers.set("Content-Disposition", `inline; filename="${file.original_filename}"`)
+      }
+
+      // Retornar chunk del archivo
+      const chunk = buffer.slice(start, end + 1)
+      return new NextResponse(chunk, {
+        status: 206, // Partial Content
+        headers,
+      })
+    }
+
+    // Para archivos completos (sin range request)
+    headers.set("Content-Length", fileSize.toString())
+    headers.set("Cache-Control", "public, max-age=31536000, immutable")
 
     if (download) {
       headers.set("Content-Disposition", `attachment; filename="${file.original_filename}"`)
