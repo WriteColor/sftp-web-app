@@ -110,8 +110,8 @@ export function SFTPConnectionButton({ onConnected }: SFTPConnectionButtonProps)
             <Button className="hover:text-white text-white" onClick={handleConnect} disabled={isConnecting} size="sm">
               {isConnecting ? (
                 <>
-                  <LineSpinner size="16" stroke="2" speed="1" className="mr-2" />
                   Conectando...
+                  <LineSpinner size="16" stroke="2" speed="1" className="mr-2" />
                 </>
               ) : (
                 "Conectar"

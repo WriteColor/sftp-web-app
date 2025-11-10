@@ -445,7 +445,7 @@ export function FileUpload({ sftpConfig, onUploadComplete, uploadBatchId, existi
         <Button onClick={handleUpload} disabled={files.length === 0 || uploading} className="w-full">
           {uploading ? (
             <>
-              <LineSpinner size="16" stroke="2" speed="1" className="mr-2" />
+              <LineSpinner size="16" stroke="2" speed="1" className="mr-2 text-white" />
             </>
           ) : (
             <>

@@ -1,195 +1,310 @@
 "use client"
 
-import { useState, useCallback } from "react"
+import { useCallback, useRef, useEffect } from "react"
 
-interface CacheEntry {
-  data: Blob
+// Nombre del cache para la Cache API
+const CACHE_NAME = "sftp-media-cache-v1"
+const MAX_MEMORY_CACHE_SIZE = 50 * 1024 * 1024 // 50MB max para caché en memoria
+const MAX_CACHE_AGE = 7 * 24 * 60 * 60 * 1000 // 7 días
+
+// Caché en memoria como fallback
+interface MemoryCacheEntry {
+  blob: Blob
   timestamp: number
   size: number
 }
 
-const DB_NAME = "SFTPClientDB"
-const STORE_NAME = "mediaCache"
-const MAX_CACHE_SIZE = 500 * 1024 * 1024 // 500MB max cache
-const MAX_ENTRY_AGE = 30 * 24 * 60 * 60 * 1000 // 30 days
+const memoryCache = new Map<string, MemoryCacheEntry>()
+let memoryCacheSize = 0
 
 export function useMediaCache() {
-  const [dbReady, setDbReady] = useState(false)
-  const [cacheSize, setCacheSize] = useState(0)
+  const cacheApiAvailableRef = useRef<boolean | null>(null)
+  const pendingOperationsRef = useRef(new Set<string>())
 
-  const initDB = useCallback(async () => {
-    return new Promise<IDBDatabase>((resolve, reject) => {
-      const request = indexedDB.open(DB_NAME, 1)
-
-      request.onerror = () => reject(request.error)
-      request.onsuccess = () => {
-        setDbReady(true)
-        resolve(request.result)
-      }
-
-      request.onupgradeneeded = (event) => {
-        const db = (event.target as IDBOpenDBRequest).result
-        if (!db.objectStoreNames.contains(STORE_NAME)) {
-          db.createObjectStore(STORE_NAME, { keyPath: "id" })
-        }
-      }
-    })
+  // Verificar si Cache API está disponible
+  const isCacheApiAvailable = useCallback(() => {
+    if (cacheApiAvailableRef.current !== null) {
+      return cacheApiAvailableRef.current
+    }
+    const available = typeof window !== "undefined" && "caches" in window
+    cacheApiAvailableRef.current = available
+    return available
   }, [])
 
+  // Generar URL de caché única para cada archivo
+  const getCacheUrl = useCallback((fileId: string) => {
+    return `sftp-cache://media/${fileId}`
+  }, [])
+
+  // Obtener archivo de la caché
   const getCachedFile = useCallback(
     async (fileId: string): Promise<Blob | null> => {
-      try {
-        const db = await initDB()
-        return new Promise((resolve) => {
-          const transaction = db.transaction(STORE_NAME, "readonly")
-          const store = transaction.objectStore(STORE_NAME)
-          const request = store.get(fileId)
+      // Evitar operaciones duplicadas
+      if (pendingOperationsRef.current.has(`get-${fileId}`)) {
+        return null
+      }
 
-          request.onsuccess = () => {
-            const entry = request.result as CacheEntry | undefined
-            if (entry) {
-              const age = Date.now() - entry.timestamp
-              if (age > MAX_ENTRY_AGE) {
-                // Remove expired entry
-                deleteCachedFile(fileId)
-                resolve(null)
-              } else {
-                resolve(entry.data)
-              }
-            } else {
-              resolve(null)
-            }
+      try {
+        // 1. Primero revisar caché en memoria (más rápido)
+        const memEntry = memoryCache.get(fileId)
+        if (memEntry) {
+          const age = Date.now() - memEntry.timestamp
+          if (age < MAX_CACHE_AGE) {
+            return memEntry.blob
+          } else {
+            // Expirado, limpiar
+            memoryCacheSize -= memEntry.size
+            memoryCache.delete(fileId)
           }
-          request.onerror = () => resolve(null)
-        })
-      } catch {
+        }
+
+        // 2. Intentar Cache API si está disponible
+        if (isCacheApiAvailable()) {
+          pendingOperationsRef.current.add(`get-${fileId}`)
+          
+          const cache = await caches.open(CACHE_NAME)
+          const cacheUrl = getCacheUrl(fileId)
+          const response = await cache.match(cacheUrl)
+
+          pendingOperationsRef.current.delete(`get-${fileId}`)
+
+          if (response) {
+            // Verificar edad del cache con header personalizado
+            const cachedTime = response.headers.get("X-Cache-Time")
+            if (cachedTime) {
+              const age = Date.now() - parseInt(cachedTime)
+              if (age > MAX_CACHE_AGE) {
+                // Expirado, eliminar
+                await cache.delete(cacheUrl)
+                return null
+              }
+            }
+
+            const blob = await response.blob()
+            
+            // Agregar a caché en memoria para acceso más rápido
+            if (blob.size < MAX_MEMORY_CACHE_SIZE) {
+              memoryCache.set(fileId, {
+                blob,
+                timestamp: Date.now(),
+                size: blob.size,
+              })
+              memoryCacheSize += blob.size
+            }
+
+            return blob
+          }
+        }
+
+        return null
+      } catch (error) {
+        pendingOperationsRef.current.delete(`get-${fileId}`)
+        // Error silencioso, retornar null
         return null
       }
     },
-    [initDB],
+    [isCacheApiAvailable, getCacheUrl],
   )
 
+  // Cachear archivo (no bloquea el thread principal)
   const cacheFile = useCallback(
     async (fileId: string, blob: Blob) => {
-      try {
-        const db = await initDB()
-        const blobSize = blob.size
+      // Evitar operaciones duplicadas
+      if (pendingOperationsRef.current.has(`set-${fileId}`)) {
+        return
+      }
 
-        // Check if adding this file would exceed max cache
-        const currentSize = await getCacheSize()
-        if (currentSize + blobSize > MAX_CACHE_SIZE) {
-          await cleanOldestEntries(blobSize)
+      const blobSize = blob.size
+
+      // Usar requestIdleCallback para operaciones de caché (no bloquea UI)
+      const performCache = async () => {
+        try {
+          // 1. Agregar a caché en memoria si es pequeño
+          if (blobSize < MAX_MEMORY_CACHE_SIZE / 2) {
+            // Limpiar memoria si es necesario
+            while (
+              memoryCacheSize + blobSize > MAX_MEMORY_CACHE_SIZE &&
+              memoryCache.size > 0
+            ) {
+              let oldestKey: string | null = null
+              let oldestTime = Date.now()
+
+              for (const [key, value] of memoryCache.entries()) {
+                if (value.timestamp < oldestTime) {
+                  oldestTime = value.timestamp
+                  oldestKey = key
+                }
+              }
+
+              if (oldestKey) {
+                const deletedEntry = memoryCache.get(oldestKey)
+                if (deletedEntry) {
+                  memoryCacheSize -= deletedEntry.size
+                  memoryCache.delete(oldestKey)
+                }
+              } else {
+                break
+              }
+            }
+
+            memoryCache.set(fileId, {
+              blob,
+              timestamp: Date.now(),
+              size: blobSize,
+            })
+            memoryCacheSize += blobSize
+          }
+
+          // 2. Intentar Cache API para persistencia
+          if (isCacheApiAvailable()) {
+            pendingOperationsRef.current.add(`set-${fileId}`)
+
+            const cache = await caches.open(CACHE_NAME)
+            const cacheUrl = getCacheUrl(fileId)
+
+            // Crear Response con headers personalizados
+            const response = new Response(blob, {
+              headers: {
+                "Content-Type": blob.type || "application/octet-stream",
+                "X-Cache-Time": Date.now().toString(),
+                "X-File-Size": blobSize.toString(),
+              },
+            })
+
+            await cache.put(cacheUrl, response)
+            pendingOperationsRef.current.delete(`set-${fileId}`)
+          }
+        } catch (error) {
+          pendingOperationsRef.current.delete(`set-${fileId}`)
+          // Error silencioso
         }
+      }
 
-        return new Promise<void>((resolve, reject) => {
-          const transaction = db.transaction(STORE_NAME, "readwrite")
-          const store = transaction.objectStore(STORE_NAME)
-          const entry: CacheEntry = {
-            data: blob,
-            timestamp: Date.now(),
-            size: blobSize,
-          }
-
-          const request = store.put({ id: fileId, ...entry })
-          request.onsuccess = () => {
-            setCacheSize((prev) => prev + blobSize)
-            resolve()
-          }
-          request.onerror = () => reject(request.error)
+      // Usar requestIdleCallback si está disponible, sino setTimeout
+      if (typeof window !== "undefined" && "requestIdleCallback" in window) {
+        window.requestIdleCallback(() => {
+          performCache()
         })
-      } catch (error) {
-        console.error("Cache error:", error)
+      } else {
+        setTimeout(performCache, 0)
       }
     },
-    [initDB],
+    [isCacheApiAvailable, getCacheUrl],
   )
 
+  // Eliminar archivo de la caché
   const deleteCachedFile = useCallback(
     async (fileId: string) => {
       try {
-        const db = await initDB()
-        return new Promise<void>((resolve) => {
-          const transaction = db.transaction(STORE_NAME, "readwrite")
-          const store = transaction.objectStore(STORE_NAME)
-          const request = store.delete(fileId)
+        // Eliminar de memoria
+        const memEntry = memoryCache.get(fileId)
+        if (memEntry) {
+          memoryCacheSize -= memEntry.size
+          memoryCache.delete(fileId)
+        }
 
-          request.onsuccess = () => resolve()
-          request.onerror = () => resolve()
-        })
+        // Eliminar de Cache API
+        if (isCacheApiAvailable()) {
+          const cache = await caches.open(CACHE_NAME)
+          const cacheUrl = getCacheUrl(fileId)
+          await cache.delete(cacheUrl)
+        }
       } catch {
-        return
+        // Error silencioso
       }
     },
-    [initDB],
+    [isCacheApiAvailable, getCacheUrl],
   )
 
+  // Limpiar caché completa
+  const clearCache = useCallback(async () => {
+    try {
+      // Limpiar memoria
+      memoryCache.clear()
+      memoryCacheSize = 0
+
+      // Limpiar Cache API
+      if (isCacheApiAvailable()) {
+        await caches.delete(CACHE_NAME)
+      }
+    } catch {
+      // Error silencioso
+    }
+  }, [isCacheApiAvailable])
+
+  // Obtener tamaño estimado de la caché
   const getCacheSize = useCallback(async (): Promise<number> => {
     try {
-      const db = await initDB()
-      return new Promise((resolve) => {
-        const transaction = db.transaction(STORE_NAME, "readonly")
-        const store = transaction.objectStore(STORE_NAME)
-        const request = store.getAll()
+      let totalSize = memoryCacheSize
 
-        request.onsuccess = () => {
-          const entries = request.result as (CacheEntry & { id: string })[]
-          const total = entries.reduce((sum, entry) => sum + entry.size, 0)
-          resolve(total)
-        }
-        request.onerror = () => resolve(0)
-      })
-    } catch {
-      return 0
-    }
-  }, [initDB])
+      if (isCacheApiAvailable()) {
+        const cache = await caches.open(CACHE_NAME)
+        const keys = await cache.keys()
 
-  const cleanOldestEntries = useCallback(
-    async (requiredSpace: number) => {
-      try {
-        const db = await initDB()
-        return new Promise<void>((resolve) => {
-          const transaction = db.transaction(STORE_NAME, "readonly")
-          const store = transaction.objectStore(STORE_NAME)
-          const request = store.getAll()
-
-          request.onsuccess = () => {
-            const entries = request.result as (CacheEntry & { id: string })[]
-            // Sort by timestamp (oldest first)
-            entries.sort((a, b) => a.timestamp - b.timestamp)
-
-            let freedSpace = 0
-            const toDelete: string[] = []
-
-            for (const entry of entries) {
-              if (freedSpace >= requiredSpace) break
-              toDelete.push(entry.id)
-              freedSpace += entry.size
+        for (const request of keys) {
+          try {
+            const response = await cache.match(request)
+            if (response) {
+              const sizeHeader = response.headers.get("X-File-Size")
+              if (sizeHeader) {
+                totalSize += parseInt(sizeHeader)
+              }
             }
-
-            // Delete oldest entries
-            const deleteTransaction = db.transaction(STORE_NAME, "readwrite")
-            const deleteStore = deleteTransaction.objectStore(STORE_NAME)
-
-            toDelete.forEach((id) => {
-              deleteStore.delete(id)
-            })
-
-            deleteTransaction.oncomplete = () => resolve()
+          } catch {
+            // Ignorar errores individuales
           }
-          request.onerror = () => resolve()
-        })
-      } catch {
-        return
+        }
       }
-    },
-    [initDB],
-  )
+
+      return totalSize
+    } catch {
+      return memoryCacheSize
+    }
+  }, [isCacheApiAvailable])
+
+  // Limpiar caché expirada en segundo plano
+  useEffect(() => {
+    if (typeof window === "undefined") return
+
+    const cleanExpiredCache = async () => {
+      try {
+        if (!isCacheApiAvailable()) return
+
+        const cache = await caches.open(CACHE_NAME)
+        const keys = await cache.keys()
+        const now = Date.now()
+
+        for (const request of keys) {
+          try {
+            const response = await cache.match(request)
+            if (response) {
+              const cachedTime = response.headers.get("X-Cache-Time")
+              if (cachedTime) {
+                const age = now - parseInt(cachedTime)
+                if (age > MAX_CACHE_AGE) {
+                  await cache.delete(request)
+                }
+              }
+            }
+          } catch {
+            // Ignorar errores individuales
+          }
+        }
+      } catch {
+        // Error silencioso
+      }
+    }
+
+    // Limpiar caché expirada después de 5 segundos
+    const timeoutId = setTimeout(cleanExpiredCache, 5000)
+    return () => clearTimeout(timeoutId)
+  }, [isCacheApiAvailable])
 
   return {
     getCachedFile,
     cacheFile,
     deleteCachedFile,
+    clearCache,
     getCacheSize,
-    dbReady,
   }
 }

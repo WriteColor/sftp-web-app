@@ -1,5 +1,5 @@
 "use client"
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import type React from "react"
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -15,6 +15,7 @@ import { GallerySkeleton } from "../common/gallery-skeleton"
 import { useMediaCache } from "@/hooks/use-media-cache"
 import { DeleteConfirmationDialog } from "../common/delete-confirmation-dialog"
 import { Play } from "lucide-react"
+import { FileCardPreview } from "../file-card/file-card-preview"
 
 interface ImageGalleryProps {
   sftpConfig: SFTPConfig
@@ -34,6 +35,16 @@ export function ImageGallery({ sftpConfig, uploadBatchId }: ImageGalleryProps) {
   const [hasSelection, setHasSelection] = useState(false)
   const [isRefreshing, setIsRefreshing] = useState(false)
   const { getCachedFile, cacheFile } = useMediaCache()
+
+  // Callback para cuando un video se cachea
+  const handleVideoCached = useCallback((fileId: string, blobUrl: string) => {
+    setCachedUrls(prev => {
+      const newMap = new Map(prev)
+      newMap.set(fileId, blobUrl)
+      return newMap
+    })
+    console.log('📹 Video cacheado y agregado a la galería:', fileId)
+  }, [])
 
   const loadFiles = async () => {
     setLoading(true)
@@ -62,23 +73,62 @@ export function ImageGallery({ sftpConfig, uploadBatchId }: ImageGalleryProps) {
     }
   }
 
+  // Cargar archivos cacheados de forma lazy (no bloquea UI)
   useEffect(() => {
-    const preloadCachedFiles = async () => {
-      const newCachedUrls = new Map<string, string>()
+    if (files.length === 0) return
 
-      for (const file of files) {
-        const cached = await getCachedFile(file.id!)
-        if (cached) {
-          const url = URL.createObjectURL(cached)
-          newCachedUrls.set(file.id!, url)
+    // Usar requestIdleCallback para no bloquear el thread principal
+    const preloadCache = () => {
+      const newCachedUrls = new Map<string, string>()
+      let processedCount = 0
+
+      const processNextBatch = async () => {
+        // Procesar en lotes pequeños de 5 archivos
+        const batchSize = 5
+        const startIdx = processedCount
+        const endIdx = Math.min(startIdx + batchSize, files.length)
+
+        for (let i = startIdx; i < endIdx; i++) {
+          const file = files[i]
+          if (!file.id) continue
+
+          try {
+            const cached = await getCachedFile(file.id)
+            if (cached) {
+              const url = URL.createObjectURL(cached)
+              newCachedUrls.set(file.id, url)
+            }
+          } catch {
+            // Ignorar errores
+          }
+        }
+
+        processedCount = endIdx
+
+        // Actualizar estado después de cada lote
+        if (newCachedUrls.size > 0) {
+          setCachedUrls((prev) => new Map([...prev, ...newCachedUrls]))
+          newCachedUrls.clear()
+        }
+
+        // Si hay más archivos, programar siguiente lote
+        if (processedCount < files.length) {
+          if (typeof window !== "undefined" && "requestIdleCallback" in window) {
+            window.requestIdleCallback(() => processNextBatch())
+          } else {
+            setTimeout(processNextBatch, 100)
+          }
         }
       }
 
-      setCachedUrls(newCachedUrls)
+      processNextBatch()
     }
 
-    if (files.length > 0) {
-      preloadCachedFiles()
+    // Iniciar precarga después de que la UI esté lista
+    if (typeof window !== "undefined" && "requestIdleCallback" in window) {
+      window.requestIdleCallback(preloadCache)
+    } else {
+      setTimeout(preloadCache, 500)
     }
   }, [files, getCachedFile])
 
@@ -297,7 +347,6 @@ export function ImageGallery({ sftpConfig, uploadBatchId }: ImageGalleryProps) {
                     viewBox="0 0 24 24"
                     fill="none"
                     className="stroke-black group-hover:stroke-white dark:stroke-white"
-
                     strokeWidth="2"
                     strokeLinecap="round"
                     strokeLinejoin="round"
@@ -324,11 +373,15 @@ export function ImageGallery({ sftpConfig, uploadBatchId }: ImageGalleryProps) {
               <p className="text-sm text-muted-foreground">Sube archivos desde la pestaña de subida</p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-              {files.map((file) => (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 smooth-scroll">
+              {files.map((file, index) => (
                 <div
                   key={file.id}
-                  className="group relative border border-border rounded-lg overflow-hidden bg-card hover:border-primary/50 transition-all hover:shadow-md"
+                  className="group relative border border-border rounded-lg overflow-hidden bg-card hover:border-primary/50 transition-all hover:shadow-md hover:-translate-y-1 animate-in fade-in-0 slide-in-from-bottom-2"
+                  style={{
+                    animationDelay: `${index * 50}ms`,
+                    animationFillMode: "both",
+                  }}
                 >
                   <div
                     className={`absolute top-3 left-3 z-10 transition-opacity ${hasSelection ? "opacity-100" : "opacity-0 group-hover:opacity-100"}`}
@@ -347,34 +400,11 @@ export function ImageGallery({ sftpConfig, uploadBatchId }: ImageGalleryProps) {
                   </div>
 
                   {isMedia(file.mime_type) ? (
-                    <div
-                      className="aspect-square relative cursor-pointer overflow-hidden bg-muted group"
+                    <FileCardPreview
+                      file={file}
+                      cachedUrl={cachedUrls.get(file.id!)}
                       onClick={() => openImage(file)}
-                    >
-                      {isVideo(file.mime_type) ? (
-                        <>
-                          <video
-                            src={cachedUrls.get(file.id!) || `/api/sftp/serve/${file.id}`}
-                            className="w-full h-full object-cover"
-                            muted
-                            loop
-                            playsInline
-                          />
-                          <div className="absolute inset-0 flex items-center justify-center bg-black/0 group-hover:bg-black/30 transition-colors">
-                            <Play className="h-8 w-8 text-white fill-white opacity-0 group-hover:opacity-100 transition-opacity" />
-                          </div>
-                        </>
-                      ) : (
-                        <Image
-                          src={cachedUrls.get(file.id!) || `/api/sftp/serve/${file.id}`}
-                          alt={file.original_filename}
-                          fill
-                          className="object-cover transition-transform group-hover:scale-110"
-                          sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
-                          unoptimized={isAnimatedImage(file.mime_type)}
-                        />
-                      )}
-                    </div>
+                    />
                   ) : (
                     <div
                       className="aspect-square flex flex-col items-center justify-center bg-muted cursor-pointer hover:bg-muted/80 transition-colors"
@@ -431,19 +461,23 @@ export function ImageGallery({ sftpConfig, uploadBatchId }: ImageGalleryProps) {
 
           <Dialog open={!!selectedImage} onOpenChange={() => setSelectedImage(null)}>
             <DialogContent className="max-w-[95vw] max-h-[95vh] p-0">
-              <DialogHeader className="p-6 pb-0">
-                <DialogTitle className="truncate">{selectedImage?.original_filename}</DialogTitle>
-                <DialogDescription>
+              <DialogHeader className="p-4 pb-2 md:p-6 md:pb-0">
+                <DialogTitle className="truncate text-sm md:text-base pr-8" title={selectedImage?.original_filename}>
+                  {selectedImage?.original_filename}
+                </DialogTitle>
+                <DialogDescription className="text-xs md:text-sm truncate">
                   {selectedImage &&
                     `${formatFileSize(selectedImage.file_size)} • ${formatDate(selectedImage.uploaded_at || "")}`}
                 </DialogDescription>
               </DialogHeader>
-              <div className="h-[calc(95vh-120px)]">
+              <div className="h-[calc(95vh-100px)] md:h-[calc(95vh-120px)]">
                 {selectedImage && (
                   <MediaViewer
                     src={cachedUrls.get(selectedImage.id!) || `/api/sftp/serve/${selectedImage.id}`}
                     alt={selectedImage.original_filename}
                     mimeType={selectedImage.mime_type}
+                    fileId={selectedImage.id}
+                    onVideoCached={handleVideoCached}
                   />
                 )}
               </div>

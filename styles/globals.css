@@ -145,3 +145,79 @@
   bottom: 0 !important;
   width: 100% !important;
 }
+
+/* Smooth scroll animations */
+* {
+  scroll-behavior: smooth;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  * {
+    scroll-behavior: smooth;
+  }
+
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: oklch(0.5 0.05 240 / 0.3);
+    border-radius: 5px;
+    transition: background 0.3s ease;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: oklch(0.5 0.05 240 / 0.5);
+  }
+
+  .dark ::-webkit-scrollbar-thumb {
+    background: oklch(0.7 0.05 240 / 0.3);
+  }
+
+  .dark ::-webkit-scrollbar-thumb:hover {
+    background: oklch(0.7 0.05 240 / 0.5);
+  }
+}
+
+/* Smooth scrolling container */
+.smooth-scroll {
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+}
+
+/* Prevenir selección de texto en toda la página (excepto inputs, textareas y elementos editables) */
+body {
+  -webkit-user-select: none; /* Safari */
+  -moz-user-select: none; /* Firefox */
+  -ms-user-select: none; /* Internet Explorer/Edge */
+  user-select: none; /* Standard syntax */
+}
+
+/* Permitir selección en elementos de entrada y texto editable */
+input,
+textarea,
+[contenteditable="true"],
+.selectable {
+  -webkit-user-select: text;
+  -moz-user-select: text;
+  -ms-user-select: text;
+  user-select: text;
+}
+
+/* File card animations */
+@keyframes fadeSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

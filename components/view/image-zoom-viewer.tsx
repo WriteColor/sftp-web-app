@@ -5,6 +5,7 @@ import { useState, useRef, useEffect, useCallback } from "react"
 import Image from "next/image"
 import { ZoomIn, ZoomOut, RotateCw, Download } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { LineSpinner } from "@/components/ui/line-spinner"
 
 interface ImageZoomViewerProps {
   src: string
@@ -17,14 +18,39 @@ export function ImageZoomViewer({ src, alt, onClose }: ImageZoomViewerProps) {
   const [position, setPosition] = useState({ x: 0, y: 0 })
   const [isDragging, setIsDragging] = useState(false)
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 })
+  const [isLoading, setIsLoading] = useState(true)
+  const [hasError, setHasError] = useState(false)
+  const [isMobile, setIsMobile] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
   const animationFrameRef = useRef<number | undefined>(undefined)
+
+  // Detectar dispositivos móviles
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768)
+    }
+    checkMobile()
+    window.addEventListener("resize", checkMobile)
+    return () => window.removeEventListener("resize", checkMobile)
+  }, [])
 
   useEffect(() => {
     setZoomLevel(1)
     setPosition({ x: 0, y: 0 })
     setIsDragging(false)
+    setIsLoading(true)
+    setHasError(false)
   }, [src])
+
+  const handleImageLoad = () => {
+    setIsLoading(false)
+    setHasError(false)
+  }
+
+  const handleImageError = () => {
+    setIsLoading(false)
+    setHasError(true)
+  }
 
   const handleWheel = useCallback((e: WheelEvent) => {
     e.preventDefault()
@@ -135,10 +161,31 @@ export function ImageZoomViewer({ src, alt, onClose }: ImageZoomViewerProps) {
     setPosition({ x: 0, y: 0 })
   }
 
+  if (hasError) {
+    return (
+      <div className="w-full h-full flex items-center justify-center bg-muted text-muted-foreground">
+        <div className="text-center">
+          <p>Error al cargar la imagen</p>
+          <p className="text-sm mt-2">{alt}</p>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="relative w-full h-full flex flex-col bg-background">
+      {/* Loading spinner */}
+      {isLoading && (
+        <div className="absolute inset-0 flex items-center justify-center bg-background z-30">
+          <div className="flex flex-col items-center gap-4">
+            <LineSpinner size="lg" color="primary" />
+            <p className="text-sm text-muted-foreground">Cargando imagen...</p>
+          </div>
+        </div>
+      )}
+
       {/* Toolbar */}
-      <div className="absolute right-1 z-10 flex gap-2 bg-background/80 backdrop-blur-sm rounded-lg p-2 shadow-lg">
+      <div className="absolute right-1 top-1 z-10 flex gap-2 bg-background/80 backdrop-blur-sm rounded-lg p-2 shadow-lg">
         <Button className="dark:text-white" variant="ghost" size="icon" onClick={zoomOut} disabled={zoomLevel <= 1} title="Alejar">
           <ZoomOut className="h-4 w-4" />
         </Button>
@@ -188,11 +235,16 @@ export function ImageZoomViewer({ src, alt, onClose }: ImageZoomViewerProps) {
               src={src || "/placeholder.svg"}
               alt={alt}
               fill
-              className="object-contain pointer-events-none select-none"
+              className={`object-contain pointer-events-none select-none transition-opacity duration-300 ${
+                isLoading ? "opacity-0" : "opacity-100"
+              }`}
               sizes="100vw"
+              quality={100}
               draggable={false}
               priority
               unoptimized={src.startsWith("blob:")}
+              onLoad={handleImageLoad}
+              onError={handleImageError}
             />
           </div>
         </div>

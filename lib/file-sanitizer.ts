@@ -53,6 +53,11 @@ async function sanitizeImage(file: File): Promise<File> {
         emitSanitizeProgress(file.name, 70, 'Recodificando...')
 
         // Convertir el canvas a blob
+        // Determinar el tipo y calidad óptimos para preservar la máxima calidad
+        const isPNG = file.type === 'image/png' || file.name.toLowerCase().endsWith('.png')
+        const outputType = isPNG ? 'image/png' : file.type || 'image/jpeg'
+        const quality = 1.0 // Calidad máxima (100%) - sin pérdida permitida
+        
         canvas.toBlob(
           (blob) => {
             URL.revokeObjectURL(objectUrl)
@@ -69,7 +74,7 @@ async function sanitizeImage(file: File): Promise<File> {
               [blob],
               file.name,
               {
-                type: file.type || 'image/png',
+                type: outputType,
                 lastModified: Date.now(), // Fecha actual para evitar exponer la original
               }
             )
@@ -87,8 +92,8 @@ async function sanitizeImage(file: File): Promise<File> {
             )
             resolve(sanitizedFile)
           },
-          file.type || 'image/png',
-          0.95 // Calidad del 95%
+          outputType,
+          quality
         )
       } catch (error) {
         URL.revokeObjectURL(objectUrl)

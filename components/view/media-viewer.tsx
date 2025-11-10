@@ -8,9 +8,11 @@ interface MediaViewerProps {
   src: string
   alt: string
   mimeType?: string
+  fileId?: string
+  onVideoCached?: (fileId: string, blobUrl: string) => void
 }
 
-export function MediaViewer({ src, alt, mimeType }: MediaViewerProps) {
+export function MediaViewer({ src, alt, mimeType, fileId, onVideoCached }: MediaViewerProps) {
   // Priorizar mimeType sobre extensión de archivo (importante para URLs blob)
   const isGif = mimeType === "image/gif" || (!mimeType && src.toLowerCase().endsWith(".gif"))
   const isAnimatedImage = 
@@ -38,7 +40,7 @@ export function MediaViewer({ src, alt, mimeType }: MediaViewerProps) {
       ))
 
   if (isVideo) {
-    return <VideoViewer src={src} alt={alt} />
+    return <VideoViewer src={src} alt={alt} fileId={fileId} onCached={onVideoCached} />
   }
 
   if (isAnimatedImage) {

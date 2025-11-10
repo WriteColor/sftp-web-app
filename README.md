@@ -1,196 +1,217 @@
+
+---
+
 # 📁 Cliente SFTP Web
 
-> Aplicación web moderna para gestionar y compartir archivos en servidores SFTP con total seguridad y privacidad.
+> Aplicación web para gestionar y compartir archivos en servidores **SFTP** con total seguridad y privacidad.
 
-[![Next.js](https://img.shields.io/badge/Next.js-16-black?style=flat&logo=next.js)](https://nextjs.org/)
-[![React](https://img.shields.io/badge/React-18-blue?style=flat&logo=react)](https://reactjs.org/)
-[![TypeScript](https://img.shields.io/badge/TypeScript-5-blue?style=flat&logo=typescript)](https://www.typescriptlang.org/)
-[![Tailwind CSS](https://img.shields.io/badge/Tailwind-4-38bdf8?style=flat&logo=tailwind-css)](https://tailwindcss.com/)
-
----
-
-## ✨ Características Principales
-
-### 🔐 Privacidad y Seguridad
-- **Sanitización automática de archivos**: Elimina metadatos sensibles (GPS, EXIF, fechas, información de dispositivo) antes de subir
-- **Eliminación de scripts ocultos**: Protección contra código malicioso en imágenes
-- **Conexión segura**: Conexión directa al servidor SFTP con credenciales protegidas
-
-### 📤 Subida de Archivos
-- **Arrastrar y soltar**: Interfaz intuitiva para agregar archivos
-- **Vista previa en tiempo real**: Previsualización de imágenes, videos y archivos de texto
-- **Progreso detallado**: Barra de progreso que muestra sanitización y subida
-- **Soporte múltiple**: Sube hasta 20 archivos a la vez (máx. 50MB cada uno)
-
-### 🖼️ Galería Inteligente
-- **Visualización de medios**: Compatible con imágenes, videos, GIFs y documentos
-- **Selección múltiple**: Selecciona y elimina varios archivos a la vez
-- **Descarga directa**: Descarga tus archivos con un clic
-- **Diseño responsivo**: Perfectamente adaptado a móviles, tablets y escritorio
-
-### ⚡ Experiencia de Usuario
-- **Auto-conexión**: Conexión automática al servidor configurado
-- **Modo oscuro/claro**: Cambia entre temas según tu preferencia
-- **Notificaciones**: Alertas visuales claras sobre el estado de tus acciones
-- **Interfaz moderna**: Diseño limpio y profesional
+[![Next.js](https://img.shields.io/badge/Next.js-16-black?style=flat\&logo=next.js)](https://nextjs.org/)
+[![React](https://img.shields.io/badge/React-18-blue?style=flat\&logo=react)](https://reactjs.org/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5-blue?style=flat\&logo=typescript)](https://www.typescriptlang.org/)
+[![Tailwind CSS](https://img.shields.io/badge/Tailwind-4-38bdf8?style=flat\&logo=tailwind-css)](https://tailwindcss.com/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 ---
 
-## 🚀 Inicio Rápido
+## ✨ Características principales
 
-### 📋 Requisitos Previos
+### 🔐 Privacidad y seguridad
 
-- Node.js 18+ o Bun
-- Una cuenta de [Supabase](https://supabase.com) (gratuita)
-- Acceso a un servidor SFTP
+* **Sanitización automática de archivos:** elimina metadatos sensibles (GPS, EXIF, fechas, información de dispositivo) antes de subirlos.
+* **Protección contra scripts ocultos:** elimina código malicioso embebido.
+* **Conexión cifrada:** conexión directa al servidor SFTP con credenciales protegidas.
 
-### 🔧 Instalación
+### 📤 Subida de archivos
 
-1. **Clona el repositorio**
-   \`\`\`bash
-   git clone https://github.com/WriteColor/sftp-web-app.git
-   cd sftp-web-app
-   \`\`\`
+* **Arrastrar y soltar:** interfaz intuitiva para agregar archivos.
+* **Vista previa en tiempo real:** imágenes, videos y texto.
+* **Progreso detallado:** sanitización + subida.
+* **Soporte múltiple:** hasta 20 archivos simultáneos (máx. 50 MB cada uno).
 
-2. **Instala las dependencias**
-   \`\`\`bash
-   npm install
-   # o con bun
-   bun install
-   \`\`\`
+### 🖼️ Galería inteligente
 
-3. **Configura las variables de entorno**
-   
-   Crea un archivo `.env.local` en la raíz del proyecto:
-   \`\`\`env
-   # Supabase
-   NEXT_PUBLIC_SUPABASE_URL=tu_supabase_url
-   NEXT_PUBLIC_SUPABASE_ANON_KEY=tu_supabase_anon_key
+* **Visualización multimedia:** imágenes, videos, GIFs y documentos.
+* **Selección múltiple y eliminación masiva.**
+* **Descarga directa con un clic.**
+* **Diseño responsivo:** adaptado a móvil, tablet y escritorio.
 
-   # SFTP (Servidor)
-   NEXT_PUBLIC_SFTP_HOST=tu_servidor_sftp
-   NEXT_PUBLIC_SFTP_PORT=22
-   NEXT_PUBLIC_SFTP_USERNAME=tu_usuario
-   SFTP_PASSWORD=tu_contraseña
-   \`\`\`
+### ⚡ Experiencia de usuario
 
-4. **Configura la base de datos**
-   
-   En tu proyecto de Supabase, ejecuta los scripts SQL ubicados en `/scripts/`:
-   - `001_create_files_table.sql`
-   - `002_create_upload_batches_table.sql`
-
-5. **Inicia el servidor**
-   \`\`\`bash
-   npm run dev
-   # o con bun
-   bun dev
-   \`\`\`
-
-6. **Abre tu navegador** en [http://localhost:3000](http://localhost:3000)
+* **Auto-conexión** al servidor configurado.
+* **Modo oscuro/claro** adaptable al sistema.
+* **Notificaciones visuales claras** del estado de cada acción.
+* **Interfaz moderna y accesible.**
 
 ---
 
-## 🎯 Cómo Usar
+## 🚀 Inicio rápido
 
-1. **Conéctate al servidor**: La aplicación se conecta automáticamente usando las credenciales configuradas
-2. **Sube archivos**: Arrastra archivos o haz clic para seleccionarlos
-3. **Espera la sanitización**: Los archivos se limpian automáticamente eliminando metadatos sensibles
-4. **Sube al servidor**: Haz clic en "Subir archivos" y observa el progreso en tiempo real
-5. **Gestiona tu galería**: Visualiza, descarga o elimina archivos desde la galería
+### 📋 Requisitos previos
+
+* Node.js ≥ 18 o [Bun](https://bun.sh)
+* Cuenta gratuita en [Supabase](https://supabase.com)
+* Acceso a un servidor SFTP
+
+### 🧩 Instalación
+
+```bash
+# 1. Clonar el repositorio
+git clone https://github.com/WriteColor/sftp-web-app.git
+
+# 2. Entrar al directorio
+cd sftp-web-app
+
+# 3. Instalar dependencias
+npm install
+# o
+bun install
+```
+
+### ⚙️ Configuración
+
+Crea un archivo `.env.local` en la raíz del proyecto con el siguiente contenido:
+
+```bash
+# Supabase
+NEXT_PUBLIC_SUPABASE_URL=tu_supabase_url
+NEXT_PUBLIC_SUPABASE_ANON_KEY=tu_supabase_anon_key
+
+# SFTP (Servidor)
+NEXT_PUBLIC_SFTP_HOST=tu_servidor_sftp
+NEXT_PUBLIC_SFTP_PORT=22
+NEXT_PUBLIC_SFTP_USERNAME=tu_usuario
+SFTP_PASSWORD=tu_contraseña
+```
+
+### 🗄️ Base de datos
+
+En tu proyecto de Supabase, ejecuta los scripts SQL del directorio `/scripts/`:
+
+```text
+001_create_files_table.sql
+002_create_upload_batches_table.sql
+```
+
+### ▶️ Ejecutar el servidor
+
+```bash
+npm run dev
+# o
+bun dev
+```
+
+Luego abre tu navegador en **[http://localhost:3000](http://localhost:3000)**
 
 ---
 
-## 🛡️ Seguridad y Privacidad
+## 🎯 Uso básico
 
-Esta aplicación prioriza tu privacidad eliminando automáticamente:
-
-- ✅ **Datos GPS y ubicación** de fotos
-- ✅ **Información EXIF** (cámara, modelo, configuración)
-- ✅ **Fechas originales** de creación y modificación
-- ✅ **Scripts y código oculto** en imágenes
-- ✅ **Metadatos de software** y dispositivos
-
-Los archivos se procesan **localmente en tu navegador** antes de subir, garantizando máxima privacidad.
+1. **Conéctate al servidor:** la app usa las credenciales configuradas automáticamente.
+2. **Sube archivos:** arrástralos o selecciónalos desde tu dispositivo.
+3. **Sanitización automática:** los metadatos sensibles se eliminan localmente.
+4. **Subida segura:** observa el progreso en tiempo real.
+5. **Gestiona tu galería:** visualiza, descarga o elimina archivos fácilmente.
 
 ---
 
-## 🛠️ Tecnologías
+## 🛡️ Seguridad y privacidad
 
-Esta aplicación está construida con tecnologías modernas:
+Los archivos se procesan **localmente en el navegador** antes de subirlos, garantizando que tus datos no salgan de tu equipo.
+El sistema elimina:
 
-- **[Next.js 16](https://nextjs.org/)** - Framework React de última generación
-- **[React 18](https://reactjs.org/)** - Librería de interfaz de usuario
-- **[TypeScript](https://www.typescriptlang.org/)** - Tipado estático para JavaScript
-- **[Tailwind CSS 4](https://tailwindcss.com/)** - Framework CSS con sistema OKLCH
-- **[Supabase](https://supabase.com/)** - Base de datos PostgreSQL y almacenamiento
-- **[shadcn/ui](https://ui.shadcn.com/)** - Componentes de UI accesibles
-- **[ssh2-sftp-client](https://www.npmjs.com/package/ssh2-sftp-client)** - Cliente SFTP para Node.js
+* 📍 Datos GPS y de ubicación
+* 🧭 Información EXIF (modelo de cámara, apertura, ISO, etc.)
+* 🕓 Fechas originales de creación y modificación
+* 🧨 Scripts o código oculto embebido
+* 🧰 Metadatos de software o dispositivo
 
 ---
 
-## 📊 Características Técnicas
+## 🛠️ Tecnologías principales
 
-### Sanitización de Archivos
-- Procesamiento del lado del cliente usando Canvas API
-- Recodificación de imágenes sin metadatos
-- Eliminación de datos EXIF completos
-- Soporte para imágenes, videos y documentos
+| Tecnología                                                             | Descripción                                    |
+| ---------------------------------------------------------------------- | ---------------------------------------------- |
+| **[Next.js 16](https://nextjs.org/)**                                  | Framework React de nueva generación            |
+| **[React 18](https://reactjs.org/)**                                   | Librería de interfaces modernas                |
+| **[TypeScript 5](https://www.typescriptlang.org/)**                    | Tipado estático seguro                         |
+| **[Tailwind CSS 4](https://tailwindcss.com/)**                         | Framework de estilos moderno con sistema OKLCH |
+| **[Supabase](https://supabase.com/)**                                  | Base de datos y autenticación                  |
+| **[shadcn/ui](https://ui.shadcn.com/)**                                | Componentes accesibles y personalizables       |
+| **[ssh2-sftp-client](https://www.npmjs.com/package/ssh2-sftp-client)** | Cliente SFTP para Node.js                      |
 
-### Gestión de Archivos
-- Selección múltiple con sincronización en tiempo real
-- Cache de medios para carga rápida
-- Previsualización de múltiples formatos
-- Sistema de progreso detallado (sanitización + subida)
+---
+
+## 📊 Detalles técnicos
+
+### Sanitización
+
+* Procesamiento local mediante **Canvas API**
+* Eliminación completa de metadatos **EXIF**
+* Recompresión limpia de imágenes
+* Compatible con imágenes, videos y documentos
+
+### Gestión de archivos
+
+* Selección múltiple y sincronización en tiempo real
+* **Cache de medios** para carga rápida
+* **Previsualización dinámica**
+* Sistema de **progreso detallado** (sanitización + subida)
 
 ### Seguridad
-- Validación estricta de entradas
-- Limitación de velocidad (rate limiting)
-- Conexión SFTP segura
-- Headers de seguridad HTTP
+
+* Validación estricta de entradas
+* **Rate limiting** en acciones críticas
+* Conexión cifrada vía SFTP
+* Cabeceras de seguridad HTTP reforzadas
 
 ---
 
-## 📝 Limitaciones
+## ⚠️ Limitaciones
 
-- **Tamaño máximo por archivo**: 50MB
-- **Archivos simultáneos**: Máximo 20 archivos a la vez
-- **Tipos de archivo**: Todos los tipos son soportados
-- **Procesamiento**: La sanitización se realiza en el navegador (requiere recursos del cliente)
+* 📁 Tamaño máximo por archivo: **50 MB** (configurable)
+* 📦 Subidas simultáneas: **20 archivos** (configurable)
+* 🧩 Procesamiento local (consume recursos del cliente)
+* 💡 Todos los tipos de archivo son compatibles
 
 ---
 
 ## 🤝 Contribuir
 
-Las contribuciones son bienvenidas. Para cambios importantes:
+Las contribuciones son **bienvenidas** 🙌
 
-1. Haz fork del repositorio
-2. Crea una rama para tu función (`git checkout -b feature/AmazingFeature`)
-3. Commit tus cambios (`git commit -m 'Add some AmazingFeature'`)
-4. Push a la rama (`git push origin feature/AmazingFeature`)
-5. Abre un Pull Request
+1. Haz **fork** del repositorio
+2. Crea una rama (`git checkout -b feature/AmazingFeature`)
+3. Haz tus cambios y **commit** (`git commit -m 'Add AmazingFeature'`)
+4. **Push** de tu rama (`git push origin feature/AmazingFeature`)
+5. Abre un **Pull Request**
+
+Consulta [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md) para más detalles.
 
 ---
 
 ## 📄 Licencia
 
-Este proyecto está bajo la Licencia MIT. Consulta el archivo `LICENSE` para más detalles.
+Este proyecto se distribuye bajo la **licencia MIT**.
+Consulta el archivo [LICENSE](LICENSE) para más información.
 
 ---
 
 ## 💬 Soporte
 
-¿Tienes preguntas o problemas? 
+¿Tienes preguntas, errores o sugerencias?
 
-- 📫 Abre un [issue](https://github.com/WriteColor/sftp-web-app/issues) en GitHub
-- ⭐ Si te gusta el proyecto, dale una estrella en GitHub
+* 📫 Abre un [issue](https://github.com/WriteColor/sftp-web-app/issues)
+* ⭐ Si te gusta el proyecto, ¡dale una estrella en GitHub!
 
 ---
 
 <div align="center">
 
-**Creado por [Write_Color](https://github.com/WriteColor)**
-
-Si este proyecto te fue útil, considera darle una ⭐
+**Desarrollado con ❤️ por [Write_Color](https://github.com/WriteColor)**
+Si este proyecto te fue útil, considera dejar una ⭐
 
 </div>
+
+---
+
+¿Quieres que te genere **la versión en inglés** o una **versión adaptada para documentación técnica (por ejemplo, `docs/index.md`)** también?
