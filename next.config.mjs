@@ -3,6 +3,14 @@ const nextConfig = {
   typescript: {
     ignoreBuildErrors: false,
   },
+  
+  // Configuración para archivos grandes
+  experimental: {
+    serverActions: {
+      bodySizeLimit: '500mb', // Aumentar límite para archivos grandes
+    },
+  },
+  
   images: {
     unoptimized: false,
     formats: ['image/avif', 'image/webp'], // Formatos modernos con mejor compresión sin pérdida
@@ -58,7 +66,7 @@ const nextConfig = {
                   "script-src 'self' 'unsafe-eval' 'unsafe-inline'",
                   "style-src 'self' 'unsafe-inline'",
                   "img-src 'self' data: blob: https:",
-                  "font-src 'self' data:",
+                  "font-src 'self' data: https://fonts.gstatic.com",
                   "connect-src 'self' https://*.supabase.co wss://*.supabase.co",
                   "media-src 'self' blob:",
                   "object-src 'none'",

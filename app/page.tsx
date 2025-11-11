@@ -15,11 +15,13 @@ export default function Home() {
   const [refreshGallery, setRefreshGallery] = useState(0)
   const [isInitialLoading, setIsInitialLoading] = useState(true)
 
+  // Configuración parcial desde el cliente (sin password)
+  // El servidor completará con las variables de entorno
   const sftpConfig: SFTPConfig = {
     host: process.env.NEXT_PUBLIC_SFTP_HOST || "",
     port: parseInt(process.env.NEXT_PUBLIC_SFTP_PORT || "22"),
     username: process.env.NEXT_PUBLIC_SFTP_USERNAME || "",
-    password: process.env.SFTP_PASSWORD || "",
+    password: "", // Se completará en el servidor
   }
 
   const handleConnectionChange = (connected: boolean) => {

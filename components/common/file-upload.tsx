@@ -12,10 +12,11 @@ import Image from "next/image"
 import { MediaViewer } from "../view/media-viewer"
 import { UploadProgressItem } from "./upload-progress-item"
 import { sanitizeFile } from "@/lib/file-sanitizer"
+import { uploadFilesAction } from "@/app/actions/upload"
 
-const MAX_FILE_SIZE = 150 * 1024 * 1024 // 150MB
+const MAX_FILE_SIZE = 500 * 1024 * 1024 // 500MB
 const MAX_FILES = 20
-const LIGHT_FILE_THRESHOLD = 50 * 1024 * 1024 // 50MB (archivos menores se procesan más rápido)
+const LIGHT_FILE_THRESHOLD = 100 * 1024 * 1024 // 100MB (archivos menores se procesan más rápido)
 
 interface FileWithPreview extends File {
   preview?: string
@@ -47,7 +48,7 @@ export function FileUpload({ sftpConfig, onUploadComplete, uploadBatchId, existi
       const oversizedFiles = acceptedFiles.filter((file) => file.size > MAX_FILE_SIZE)
       if (oversizedFiles.length > 0) {
         toast.warning("Archivos demasiado grandes", {
-          description: `${oversizedFiles.length} archivo(s) exceden el tamaño máximo de 50MB`,
+          description: `${oversizedFiles.length} archivo(s) exceden el tamaño máximo de 500MB`,
         })
         return
       }
@@ -121,8 +122,8 @@ export function FileUpload({ sftpConfig, onUploadComplete, uploadBatchId, existi
     return [...lightFiles, ...heavyFiles]
   }
 
-  const uploadFileWithProgress = (file: File): Promise<boolean> => {
-    return new Promise((resolve) => {
+  const uploadFileWithProgress = async (file: File): Promise<boolean> => {
+    try {
       // Emitir evento de inicio de subida
       window.dispatchEvent(
         new CustomEvent("fileProgress", {
@@ -135,108 +136,68 @@ export function FileUpload({ sftpConfig, onUploadComplete, uploadBatchId, existi
         }),
       )
 
-      const xhr = new XMLHttpRequest()
-
-      xhr.upload.addEventListener("progress", (e) => {
-        if (e.lengthComputable) {
-          const progress = Math.round((e.loaded / e.total) * 99) // Máximo 99% hasta que se complete
-          window.dispatchEvent(
-            new CustomEvent("fileProgress", {
-              detail: {
-                fileName: file.name,
-                progress,
-                status: "uploading",
-                statusMessage: `Subiendo... ${progress}%`,
-              },
-            }),
-          )
-        }
-      })
-
-      xhr.addEventListener("load", () => {
-        if (xhr.status === 200) {
-          try {
-            const response = JSON.parse(xhr.responseText)
-            if (response.success) {
-              window.dispatchEvent(
-                new CustomEvent("fileProgress", {
-                  detail: {
-                    fileName: file.name,
-                    progress: 100,
-                    status: "success",
-                  },
-                }),
-              )
-              resolve(true)
-            } else {
-              throw new Error(response.message || "Error en la respuesta del servidor")
-            }
-          } catch (error) {
-            window.dispatchEvent(
-              new CustomEvent("fileProgress", {
-                detail: {
-                  fileName: file.name,
-                  progress: 0,
-                  status: "error",
-                  error: error instanceof Error ? error.message : "Error desconocido",
-                },
-              }),
-            )
-            resolve(false)
-          }
-        } else {
-          window.dispatchEvent(
-            new CustomEvent("fileProgress", {
-              detail: {
-                fileName: file.name,
-                progress: 0,
-                status: "error",
-                error: `HTTP ${xhr.status}`,
-              },
-            }),
-          )
-          resolve(false)
-        }
-      })
-
-      xhr.addEventListener("error", () => {
+      // Simular progreso para archivos grandes (Server Actions no soportan progreso real de upload)
+      let simulatedProgress = 0
+      const progressInterval = setInterval(() => {
+        simulatedProgress = Math.min(simulatedProgress + Math.random() * 15, 90)
         window.dispatchEvent(
           new CustomEvent("fileProgress", {
             detail: {
               fileName: file.name,
-              progress: 0,
-              status: "error",
-              error: "Error de conexión",
+              progress: Math.round(simulatedProgress),
+              status: "uploading",
+              statusMessage: `Subiendo... ${Math.round(simulatedProgress)}%`,
             },
           }),
         )
-        resolve(false)
-      })
-
-      xhr.addEventListener("abort", () => {
-        window.dispatchEvent(
-          new CustomEvent("fileProgress", {
-            detail: {
-              fileName: file.name,
-              progress: 0,
-              status: "error",
-              error: "Cancelado",
-            },
-          }),
-        )
-        resolve(false)
-      })
+      }, 1000)
 
       const formData = new FormData()
       formData.append("files", file)
       formData.append("config", JSON.stringify(sftpConfig))
-      if (uploadBatchId) {
-        formData.append("uploadBatchId", uploadBatchId)
-      }
 
-      xhr.open("POST", "/api/sftp/upload")
-      xhr.send(formData)
-    })
+      // Usar Server Action en lugar de fetch/XMLHttpRequest
+      const result = await uploadFilesAction(formData)
+
+      clearInterval(progressInterval)
+
+      if (result.success) {
+        window.dispatchEvent(
+          new CustomEvent("fileProgress", {
+            detail: {
+              fileName: file.name,
+              progress: 100,
+              status: "success",
+            },
+          }),
+        )
+        return true
+      } else {
+        window.dispatchEvent(
+          new CustomEvent("fileProgress", {
+            detail: {
+              fileName: file.name,
+              progress: 0,
+              status: "error",
+              error: result.error || "Error desconocido",
+            },
+          }),
+        )
+        return false
+      }
+    } catch (error) {
+      window.dispatchEvent(
+        new CustomEvent("fileProgress", {
+          detail: {
+            fileName: file.name,
+            progress: 0,
+            status: "error",
+            error: error instanceof Error ? error.message : "Error de conexión",
+          },
+        }),
+      )
+      return false
+    }
   }
 
   const handleUpload = async () => {
@@ -344,7 +305,7 @@ export function FileUpload({ sftpConfig, onUploadComplete, uploadBatchId, existi
       <CardHeader>
         <CardTitle>Subir Archivos</CardTitle>
         <CardDescription>
-          Arrastra archivos aquí o haz clic para seleccionar (máx. {MAX_FILES} archivos, 50MB cada uno)
+          Arrastra archivos aquí o haz clic para seleccionar (máx. {MAX_FILES} archivos, 500MB cada uno)
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -361,7 +322,7 @@ export function FileUpload({ sftpConfig, onUploadComplete, uploadBatchId, existi
             <div>
               <p className="text-sm text-muted-foreground mb-2">Arrastra archivos aquí o haz clic para seleccionar</p>
               <p className="text-xs text-muted-foreground">
-                {totalFiles}/{MAX_FILES} archivos • Máximo 50MB cada uno
+                {totalFiles}/{MAX_FILES} archivos • Máximo 500MB cada uno
               </p>
             </div>
           )}

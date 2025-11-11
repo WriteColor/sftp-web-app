@@ -3,9 +3,7 @@ import type { Metadata } from "next"
 import { Geist, Geist_Mono } from "next/font/google"
 import { Analytics } from "@vercel/analytics/next"
 import "@/styles/globals.css"
-import { ThemeSwitcher } from "@/components/common/theme-switcher"
-import { Button } from "@/components/ui/button"
-import { Github } from "lucide-react"
+import { AppHeader } from "@/components/common/app-header"
 
 const _geist = Geist({ subsets: ["latin"] })
 const _geistMono = Geist_Mono({ subsets: ["latin"] })
@@ -40,24 +38,7 @@ export default function RootLayout({
         />
       </head>
       <body className={`font-sans antialiased`}>
-        <header className="border-b bg-background sticky top-0 z-40">
-          <div className="container mx-auto px-3 sm:px-4 max-w-7xl flex items-center justify-between h-14 sm:h-16">
-            <div />
-            <div className="flex items-center gap-1 sm:gap-2">
-              <Button variant="outline" size="icon" asChild>
-                <a 
-                  href="https://github.com/WriteColor/sftp-web-app" 
-                  target="_blank" 
-                  rel="noopener noreferrer"
-                  aria-label="Ver proyecto en GitHub"
-                >
-                  <Github className="h-4 w-4" />
-                </a>
-              </Button>
-              <ThemeSwitcher />
-            </div>
-          </div>
-        </header>
+        <AppHeader />
         {children}
         {process.env.NODE_ENV === 'production' && <Analytics />}
       </body>

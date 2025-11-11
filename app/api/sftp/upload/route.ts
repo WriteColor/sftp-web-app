@@ -9,12 +9,16 @@ import { rateLimit } from "@/lib/sftp-settings/rate-limit"
 import { getServerSFTPConfig } from "@/lib/sftp-settings/sftp-config"
 import { secureJsonResponse, isValidUUID } from "@/lib/security"
 
-const MAX_FILE_SIZE = 150 * 1024 * 1024 // 150MB
+const MAX_FILE_SIZE = 500 * 1024 * 1024 // 500MB
 const MAX_FILES = 20
 const ALLOWED_MIME_TYPES = [
   'image/', 'video/', 'audio/', 'text/', 'application/pdf',
   'application/json', 'application/xml', 'application/zip'
 ]
+
+// Configuración de timeout más amplio para archivos grandes
+export const maxDuration = 300 // 5 minutos
+export const dynamic = 'force-dynamic'
 
 export async function POST(request: NextRequest) {
   let sftp: any = null
