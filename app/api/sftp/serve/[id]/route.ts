@@ -44,8 +44,11 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     const { data: file, error: fetchError } = await supabase.from("sftp_files").select("*").eq("id", id).single()
 
     if (fetchError || !file) {
+      console.error("[WC] File not found in database:", id, fetchError)
       return NextResponse.json({ success: false, message: "Archivo no encontrado" }, { status: 404 })
     }
+
+    console.log("[WC] Serving file:", file.filename, "from:", file.file_path)
 
     // Obtener configuración SFTP
     const config = await getSFTPConfig()

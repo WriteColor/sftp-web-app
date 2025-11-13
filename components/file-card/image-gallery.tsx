@@ -4,18 +4,16 @@ import type React from "react"
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Download, Trash2, ImageIcon, FileIcon, Check } from "lucide-react"
+import { Trash2, ImageIcon, FileIcon, Check } from "lucide-react"
 import { LineSpinner } from "@/components/ui/line-spinner"
 import type { FileMetadata, SFTPConfig } from "@/lib/types"
-import Image from "next/image"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { toast } from "sonner"
-import { MediaViewer } from "./media-viewer"
+import { MediaViewer } from "@/components/view/media-viewer"
 import { GallerySkeleton } from "../common/gallery-skeleton"
 import { useMediaCache } from "@/hooks/use-media-cache"
 import { DeleteConfirmationDialog } from "../common/delete-confirmation-dialog"
-import { Play } from "lucide-react"
-import { FileCardPreview } from "../file-card/file-card-preview"
+import { FileCardPreview } from "./file-card-preview"
 
 interface ImageGalleryProps {
   sftpConfig: SFTPConfig
@@ -38,29 +36,29 @@ export function ImageGallery({ sftpConfig, uploadBatchId }: ImageGalleryProps) {
   const [slowLoadToastShown, setSlowLoadToastShown] = useState(false)
   const { getCachedFile, cacheFile } = useMediaCache()
 
-  // Callback para trackear inicio de carga
   const handleFileLoadStart = useCallback((fileId: string) => {
-    setLoadingFiles(prev => new Set(prev).add(fileId))
+    setLoadingFiles((prev) => new Set(prev).add(fileId))
   }, [])
 
-  // Callback para trackear fin de carga
   const handleFileLoadEnd = useCallback((fileId: string) => {
-    setLoadingFiles(prev => {
+    setLoadingFiles((prev) => {
       const newSet = new Set(prev)
       newSet.delete(fileId)
       return newSet
     })
   }, [])
 
-  // Callback para cuando un video se cachea
-  const handleVideoCached = useCallback((fileId: string, blobUrl: string) => {
-    setCachedUrls(prev => {
-      const newMap = new Map(prev)
-      newMap.set(fileId, blobUrl)
-      return newMap
-    })
-    handleFileLoadEnd(fileId)
-  }, [handleFileLoadEnd])
+  const handleVideoCached = useCallback(
+    (fileId: string, blobUrl: string) => {
+      setCachedUrls((prev) => {
+        const newMap = new Map(prev)
+        newMap.set(fileId, blobUrl)
+        return newMap
+      })
+      handleFileLoadEnd(fileId)
+    },
+    [handleFileLoadEnd],
+  )
 
   const loadFiles = async () => {
     setLoading(true)
@@ -89,17 +87,14 @@ export function ImageGallery({ sftpConfig, uploadBatchId }: ImageGalleryProps) {
     }
   }
 
-  // Cargar archivos cacheados de forma lazy (no bloquea UI)
   useEffect(() => {
     if (files.length === 0) return
 
-    // Usar requestIdleCallback para no bloquear el thread principal
     const preloadCache = () => {
       const newCachedUrls = new Map<string, string>()
       let processedCount = 0
 
       const processNextBatch = async () => {
-        // Procesar en lotes pequeños de 5 archivos
         const batchSize = 5
         const startIdx = processedCount
         const endIdx = Math.min(startIdx + batchSize, files.length)
@@ -114,20 +109,16 @@ export function ImageGallery({ sftpConfig, uploadBatchId }: ImageGalleryProps) {
               const url = URL.createObjectURL(cached)
               newCachedUrls.set(file.id, url)
             }
-          } catch {
-            // Ignorar errores
-          }
+          } catch {}
         }
 
         processedCount = endIdx
 
-        // Actualizar estado después de cada lote
         if (newCachedUrls.size > 0) {
           setCachedUrls((prev) => new Map([...prev, ...newCachedUrls]))
           newCachedUrls.clear()
         }
 
-        // Si hay más archivos, programar siguiente lote
         if (processedCount < files.length) {
           if (typeof window !== "undefined" && "requestIdleCallback" in window) {
             window.requestIdleCallback(() => processNextBatch())
@@ -140,17 +131,15 @@ export function ImageGallery({ sftpConfig, uploadBatchId }: ImageGalleryProps) {
       processNextBatch()
     }
 
-    // Iniciar precarga después de que la UI esté lista
     if (typeof window !== "undefined" && "requestIdleCallback" in window) {
       window.requestIdleCallback(preloadCache)
     } else {
       setTimeout(preloadCache, 500)
     }
 
-    // Cleanup: revocar URLs cuando el componente se desmonte
     return () => {
-      cachedUrls.forEach(url => {
-        if (url.startsWith('blob:')) {
+      cachedUrls.forEach((url) => {
+        if (url.startsWith("blob:")) {
           URL.revokeObjectURL(url)
         }
       })
@@ -161,7 +150,6 @@ export function ImageGallery({ sftpConfig, uploadBatchId }: ImageGalleryProps) {
     loadFiles()
   }, [uploadBatchId])
 
-  // Monitorear archivos con carga lenta
   useEffect(() => {
     if (loadingFiles.size === 0 || slowLoadToastShown) return
 
@@ -173,12 +161,11 @@ export function ImageGallery({ sftpConfig, uploadBatchId }: ImageGalleryProps) {
           duration: 5000,
         })
       }
-    }, 7000) // Mostrar después de 7 segundos
+    }, 7000)
 
     return () => clearTimeout(timeoutId)
   }, [loadingFiles, slowLoadToastShown])
 
-  // Reiniciar toast cuando no haya archivos cargando
   useEffect(() => {
     if (loadingFiles.size === 0) {
       setSlowLoadToastShown(false)
@@ -198,7 +185,6 @@ export function ImageGallery({ sftpConfig, uploadBatchId }: ImageGalleryProps) {
 
       if (data.success) {
         setFiles((prev) => prev.filter((f) => f.id !== fileId))
-        // Actualizar el estado de selección eliminando el archivo del conjunto
         setSelectedIds((prev) => {
           const newSet = new Set(prev)
           newSet.delete(fileId)
@@ -270,7 +256,6 @@ export function ImageGallery({ sftpConfig, uploadBatchId }: ImageGalleryProps) {
   const openImage = async (file: FileMetadata) => {
     setSelectedImage(file)
 
-    // Try to cache the file if not already cached
     if (!cachedUrls.has(file.id!)) {
       try {
         const response = await fetch(`/api/sftp/serve/${file.id}`)
@@ -302,25 +287,8 @@ export function ImageGallery({ sftpConfig, uploadBatchId }: ImageGalleryProps) {
     })
   }
 
-  const isAnimatedImage = (mimeType: string) => {
-    return mimeType === "image/gif" || mimeType === "image/webp" || mimeType === "image/apng"
-  }
-
-  const isVideo = (mimeType: string) => {
-    return mimeType.startsWith("video/")
-  }
-
   const isMedia = (mimeType: string) => {
     return mimeType.startsWith("image/") || mimeType.startsWith("video/")
-  }
-
-  const isTextFile = (mimeType: string) => {
-    return (
-      mimeType.startsWith("text/") ||
-      mimeType === "application/json" ||
-      mimeType === "application/xml" ||
-      mimeType === "application/x-yaml"
-    )
   }
 
   if (loading) {
@@ -348,12 +316,12 @@ export function ImageGallery({ sftpConfig, uploadBatchId }: ImageGalleryProps) {
     <>
       <Card className="border-border shadow-sm">
         <CardHeader className="border-b border-border">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
             <div>
               <CardTitle className="text-2xl">Galería de Archivos</CardTitle>
               <CardDescription className="mt-1">{files.length} archivo(s) almacenado(s)</CardDescription>
             </div>
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2 w-full sm:w-auto">
               {selectedIds.size > 0 && (
                 <>
                   <Button
@@ -361,10 +329,11 @@ export function ImageGallery({ sftpConfig, uploadBatchId }: ImageGalleryProps) {
                     size="sm"
                     onClick={() => setDeleteConfirm({ open: true, isBulk: true })}
                     disabled={isDeleting}
-                    className="gap-2"
+                    className="gap-2 flex-1 sm:flex-none"
                   >
                     <Trash2 className="h-4 w-4" />
-                    Eliminar ({selectedIds.size})
+                    <span className="hidden sm:inline">Eliminar ({selectedIds.size})</span>
+                    <span className="sm:hidden">({selectedIds.size})</span>
                   </Button>
                   <Button
                     variant="outline"
@@ -373,9 +342,9 @@ export function ImageGallery({ sftpConfig, uploadBatchId }: ImageGalleryProps) {
                       setSelectedIds(new Set())
                       setHasSelection(false)
                     }}
-                    className="gap-2"
+                    className="gap-2 flex-1 sm:flex-none"
                   >
-                    Limpiar selección
+                    Limpiar
                   </Button>
                 </>
               )}
@@ -384,7 +353,7 @@ export function ImageGallery({ sftpConfig, uploadBatchId }: ImageGalleryProps) {
                 size="icon"
                 onClick={loadFiles}
                 disabled={isRefreshing}
-                className="border-border"
+                className="border-border bg-transparent"
               >
                 {isRefreshing ? (
                   <LineSpinner size="20" stroke="3" speed="1" />
@@ -422,11 +391,11 @@ export function ImageGallery({ sftpConfig, uploadBatchId }: ImageGalleryProps) {
               <p className="text-sm text-muted-foreground">Sube archivos desde la pestaña de subida</p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 smooth-scroll">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
               {files.map((file, index) => (
                 <div
                   key={file.id}
-                  className="group relative border border-border rounded-lg overflow-hidden bg-card hover:border-primary/50 transition-all hover:shadow-md hover:-translate-y-1 animate-in fade-in-0 slide-in-from-bottom-2"
+                  className="group relative border border-border rounded-lg overflow-hidden bg-card hover:border-primary/50 transition-all hover:shadow-md hover:-translate-y-1 animate-in fade-in-0 slide-in-from-bottom-2 flex flex-col"
                   style={{
                     animationDelay: `${index * 50}ms`,
                     animationFillMode: "both",
@@ -437,14 +406,13 @@ export function ImageGallery({ sftpConfig, uploadBatchId }: ImageGalleryProps) {
                   >
                     <button
                       onClick={(e) => toggleSelection(file.id!, e)}
-                      className={`flex items-center justify-center w-5 h-5 rounded border-2 transition-all shadow-lg backdrop-blur-sm ${selectedIds.has(file.id!)
+                      className={`flex items-center justify-center w-5 h-5 rounded border-2 transition-all shadow-lg backdrop-blur-sm ${
+                        selectedIds.has(file.id!)
                           ? "bg-primary border-primary"
                           : "bg-background/90 border-muted-foreground/30 hover:border-primary hover:bg-background"
-                        }`}
+                      }`}
                     >
-                      {selectedIds.has(file.id!) && (
-                        <Check className="h-3.5 w-3.5 text-white" />
-                      )}
+                      {selectedIds.has(file.id!) && <Check className="h-3.5 w-3.5 text-white" />}
                     </button>
                   </div>
 
@@ -454,7 +422,7 @@ export function ImageGallery({ sftpConfig, uploadBatchId }: ImageGalleryProps) {
                       cachedUrl={cachedUrls.get(file.id!)}
                       onClick={() => openImage(file)}
                       onCacheReady={(fileId, blobUrl) => {
-                        setCachedUrls(prev => {
+                        setCachedUrls((prev) => {
                           const newMap = new Map(prev)
                           newMap.set(fileId, blobUrl)
                           return newMap
@@ -468,36 +436,36 @@ export function ImageGallery({ sftpConfig, uploadBatchId }: ImageGalleryProps) {
                       className="aspect-square flex flex-col items-center justify-center bg-muted cursor-pointer hover:bg-muted/80 transition-colors"
                       onClick={() => openImage(file)}
                     >
-                      <FileIcon className="h-10 w-10 text-muted-foreground mb-2" />
-                      <p className="text-xs text-muted-foreground text-center px-2 truncate">
+                      <FileIcon className="h-10 w-10 text-muted-foreground mb-2 shrink-0" />
+                      <p className="text-xs text-muted-foreground text-center px-2 line-clamp-2 wrap-break-word">
                         {file.original_filename}
                       </p>
                     </div>
                   )}
 
-                  <div className="p-4 space-y-3 border-t border-border">
-                    <div>
+                  <div className="p-3 sm:p-4 space-y-2 sm:space-y-3 border-t border-border flex flex-col flex-1">
+                    <div className="min-w-0 flex-1">
                       <p className="text-sm font-medium truncate text-foreground" title={file.original_filename}>
                         {file.original_filename}
                       </p>
-                      <div className="flex items-center justify-between text-xs text-muted-foreground mt-1.5">
-                        <span className="font-medium">{formatFileSize(file.file_size)}</span>
-                        <span>{formatDate(file.uploaded_at || "")}</span>
+                      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between text-xs text-muted-foreground mt-1.5 gap-1 sm:gap-2">
+                        <span className="font-medium shrink-0">{formatFileSize(file.file_size)}</span>
+                        <span className="truncate">{formatDate(file.uploaded_at || "")}</span>
                       </div>
                     </div>
 
-                    <div className="flex gap-2 pt-2">
+                    <div className="flex gap-2 pt-2 flex-wrap sm:flex-nowrap">
                       <Button
                         variant="outline"
                         size="sm"
-                        className="flex-1 border-border text-xs"
+                        className="flex-1 border-border text-xs min-w-0 bg-transparent"
                         asChild
                       >
                         <a
                           href={cachedUrls.get(file.id!) || `/api/sftp/serve/${file.id}?download=true`}
                           download={file.original_filename}
+                          className="truncate"
                         >
-                          {/* <Download className="h-3.5 w-3.5 mr-1.5 hover:text-white" /> */}
                           Descargar
                         </a>
                       </Button>
@@ -506,7 +474,7 @@ export function ImageGallery({ sftpConfig, uploadBatchId }: ImageGalleryProps) {
                         size="sm"
                         onClick={() => setDeleteConfirm({ open: true, fileId: file.id, isBulk: false })}
                         disabled={isDeleting}
-                        className="text-xs"
+                        className="text-xs shrink-0"
                       >
                         <Trash2 className="h-3.5 w-3.5" />
                       </Button>
@@ -518,17 +486,15 @@ export function ImageGallery({ sftpConfig, uploadBatchId }: ImageGalleryProps) {
           )}
 
           <Dialog open={!!selectedImage} onOpenChange={() => setSelectedImage(null)}>
-            <DialogContent className="max-w-[95vw] max-h-[95vh] p-0">
-              <DialogHeader className="p-4 pb-2 md:p-6 md:pb-0">
-                <DialogTitle className="truncate text-sm md:text-base pr-8" title={selectedImage?.original_filename}>
-                  {selectedImage?.original_filename}
-                </DialogTitle>
-                <DialogDescription className="text-xs md:text-sm truncate">
+            <DialogContent className="max-w-[95vw] max-h-[95vh] p-0 gap-0">
+              <DialogHeader className="p-3 sm:p-4 pb-2 sm:pb-3 md:p-6 md:pb-0 border-b border-border sr-only">
+                <DialogTitle className="sr-only">{selectedImage?.original_filename}</DialogTitle>
+                <DialogDescription className="sr-only">
                   {selectedImage &&
                     `${formatFileSize(selectedImage.file_size)} • ${formatDate(selectedImage.uploaded_at || "")}`}
                 </DialogDescription>
               </DialogHeader>
-              <div className="h-[calc(95vh-100px)] md:h-[calc(95vh-120px)]">
+              <div className="h-[calc(95vh-60px)] sm:h-[calc(95vh-80px)] md:h-[calc(95vh-120px)]">
                 {selectedImage && (
                   <MediaViewer
                     src={cachedUrls.get(selectedImage.id!) || `/api/sftp/serve/${selectedImage.id}`}

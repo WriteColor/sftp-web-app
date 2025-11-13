@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
-import { Github } from "lucide-react"
+import { ExternalLink } from "lucide-react"
 import { ThemeSwitcher } from "@/components/common/theme-switcher"
 import { Skeleton } from "@/components/ui/skeleton"
 
@@ -43,7 +43,7 @@ export function AppHeader() {
             variant="outline" 
             size="icon" 
             asChild
-            className="transition-all hover:scale-105"
+            className="transition-all hover:scale-105 "
           >
             <a 
               href="https://github.com/WriteColor/sftp-web-app" 
@@ -51,7 +51,7 @@ export function AppHeader() {
               rel="noopener noreferrer"
               aria-label="Ver proyecto en GitHub"
             >
-              <Github className="h-4 w-4" />
+              <ExternalLink className="h-4 w-4 dark:stroke-white" />
             </a>
           </Button>
           <ThemeSwitcher />

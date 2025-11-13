@@ -2,12 +2,14 @@
 
 import { useCallback, useRef, useEffect } from "react"
 
-// Nombre del cache para la Cache API
-const CACHE_NAME = "sftp-media-cache-v1"
+// Nombre del cache para la Cache API y IndexedDB
+const CACHE_NAME = "sftp-media-cache-v2"
+const INDEXEDDB_NAME = "sftp-media-store"
+const INDEXEDDB_STORE = "files"
 const MAX_MEMORY_CACHE_SIZE = 50 * 1024 * 1024 // 50MB max para caché en memoria
 const MAX_CACHE_AGE = 7 * 24 * 60 * 60 * 1000 // 7 días
+const MAX_INDEXEDDB_SIZE = 500 * 1024 * 1024 // 500MB max para IndexedDB
 
-// Caché en memoria como fallback
 interface MemoryCacheEntry {
   blob: Blob
   timestamp: number
@@ -17,9 +19,45 @@ interface MemoryCacheEntry {
 const memoryCache = new Map<string, MemoryCacheEntry>()
 let memoryCacheSize = 0
 
+async function initIndexedDB(): Promise<IDBDatabase | null> {
+  return new Promise((resolve, reject) => {
+    try {
+      if (typeof window === "undefined" || !window.indexedDB) {
+        resolve(null)
+        return
+      }
+
+      const request = window.indexedDB.open(INDEXEDDB_NAME, 1)
+
+      request.onerror = () => {
+        console.error("[WC] IndexedDB error:", request.error)
+        resolve(null)
+      }
+
+      request.onsuccess = () => {
+        resolve(request.result)
+      }
+
+      request.onupgradeneeded = (event) => {
+        const db = (event.target as IDBOpenDBRequest).result
+        if (!db.objectStoreNames.contains(INDEXEDDB_STORE)) {
+          const store = db.createObjectStore(INDEXEDDB_STORE, { keyPath: "id" })
+          store.createIndex("timestamp", "timestamp", { unique: false })
+          console.log("[WC] IndexedDB store created")
+        }
+      }
+    } catch (error) {
+      console.error("[WC] IndexedDB initialization error:", error)
+      resolve(null)
+    }
+  })
+}
+
 export function useMediaCache() {
   const cacheApiAvailableRef = useRef<boolean | null>(null)
+  const indexedDBRef = useRef<IDBDatabase | null>(null)
   const pendingOperationsRef = useRef(new Set<string>())
+  const initPromiseRef = useRef<Promise<IDBDatabase | null> | null>(null)
 
   // Verificar si Cache API está disponible
   const isCacheApiAvailable = useCallback(() => {
@@ -31,25 +69,48 @@ export function useMediaCache() {
     return available
   }, [])
 
-  // Generar URL de caché única para cada archivo
-  const getCacheUrl = useCallback((fileId: string) => {
-    return `sftp-cache://media/${fileId}`
+  const getIndexedDB = useCallback(async (): Promise<IDBDatabase | null> => {
+    if (indexedDBRef.current) {
+      return indexedDBRef.current
+    }
+
+    if (!initPromiseRef.current) {
+      initPromiseRef.current = initIndexedDB()
+    }
+
+    const db = await initPromiseRef.current
+    if (db) {
+      indexedDBRef.current = db
+    }
+    return db
   }, [])
 
-  // Obtener archivo de la caché
+  // Generar URL de caché única para cada archivo
+  const getCacheUrl = useCallback((fileId: string) => {
+    return new URL(
+      `/api/cache/${fileId}`,
+      typeof window !== "undefined" ? window.location.origin : "http://localhost:3000",
+    ).toString()
+  }, [])
+
   const getCachedFile = useCallback(
     async (fileId: string): Promise<Blob | null> => {
       // Evitar operaciones duplicadas
       if (pendingOperationsRef.current.has(`get-${fileId}`)) {
+        console.log("[WC] Skipping duplicate get operation for:", fileId)
         return null
       }
 
       try {
+        pendingOperationsRef.current.add(`get-${fileId}`)
+
         // 1. Primero revisar caché en memoria (más rápido)
         const memEntry = memoryCache.get(fileId)
         if (memEntry) {
           const age = Date.now() - memEntry.timestamp
           if (age < MAX_CACHE_AGE) {
+            console.log("[WC] Found in memory cache:", fileId)
+            pendingOperationsRef.current.delete(`get-${fileId}`)
             return memEntry.blob
           } else {
             // Expirado, limpiar
@@ -58,74 +119,129 @@ export function useMediaCache() {
           }
         }
 
-        // 2. Intentar Cache API si está disponible
-        if (isCacheApiAvailable()) {
-          pendingOperationsRef.current.add(`get-${fileId}`)
-          
-          const cache = await caches.open(CACHE_NAME)
-          const cacheUrl = getCacheUrl(fileId)
-          const response = await cache.match(cacheUrl)
+        // 2. Intentar IndexedDB (persistencia)
+        const db = await getIndexedDB()
+        if (db) {
+          try {
+            const blob = await new Promise<Blob | null>((resolve) => {
+              try {
+                const transaction = db.transaction([INDEXEDDB_STORE], "readonly")
+                const store = transaction.objectStore(INDEXEDDB_STORE)
+                const request = store.get(fileId)
 
-          pendingOperationsRef.current.delete(`get-${fileId}`)
+                request.onsuccess = () => {
+                  const result = request.result
+                  if (result && result.data) {
+                    const age = Date.now() - result.timestamp
+                    if (age < MAX_CACHE_AGE) {
+                      console.log("[WC] Found in IndexedDB:", fileId)
+                      const blobData = result.data
+                      // Intentar reconstruir el blob con el tipo MIME correcto
+                      const reconstructedBlob = new Blob([blobData], {
+                        type: result.mimeType || "application/octet-stream",
+                      })
+                      resolve(reconstructedBlob)
+                      return
+                    } else {
+                      // Expirado, eliminar
+                      const deleteTransaction = db.transaction([INDEXEDDB_STORE], "readwrite")
+                      const deleteStore = deleteTransaction.objectStore(INDEXEDDB_STORE)
+                      deleteStore.delete(fileId)
+                      console.log("[WC] Expired entry removed from IndexedDB:", fileId)
+                    }
+                  }
+                  resolve(null)
+                }
 
-          if (response) {
-            // Verificar edad del cache con header personalizado
-            const cachedTime = response.headers.get("X-Cache-Time")
-            if (cachedTime) {
-              const age = Date.now() - parseInt(cachedTime)
-              if (age > MAX_CACHE_AGE) {
-                // Expirado, eliminar
-                await cache.delete(cacheUrl)
-                return null
+                request.onerror = () => {
+                  console.error("[WC] IndexedDB read error:", request.error)
+                  resolve(null)
+                }
+              } catch (error) {
+                console.error("[WC] IndexedDB transaction error:", error)
+                resolve(null)
               }
-            }
+            })
 
-            const blob = await response.blob()
-            
-            // Agregar a caché en memoria para acceso más rápido
-            if (blob.size < MAX_MEMORY_CACHE_SIZE) {
-              memoryCache.set(fileId, {
-                blob,
-                timestamp: Date.now(),
-                size: blob.size,
-              })
-              memoryCacheSize += blob.size
+            if (blob) {
+              pendingOperationsRef.current.delete(`get-${fileId}`)
+              return blob
             }
-
-            return blob
+          } catch (error) {
+            console.error("[WC] IndexedDB retrieval failed:", error)
           }
         }
 
+        // 3. Intentar Cache API si está disponible
+        if (isCacheApiAvailable()) {
+          try {
+            const cache = await caches.open(CACHE_NAME)
+            const cacheUrl = getCacheUrl(fileId)
+            const response = await cache.match(cacheUrl)
+
+            if (response) {
+              const cachedTime = response.headers.get("X-Cache-Time")
+              if (cachedTime) {
+                const age = Date.now() - Number.parseInt(cachedTime)
+                if (age > MAX_CACHE_AGE) {
+                  // Expirado, eliminar
+                  await cache.delete(cacheUrl)
+                  console.log("[WC] Expired entry removed from Cache API:", fileId)
+                  pendingOperationsRef.current.delete(`get-${fileId}`)
+                  return null
+                }
+              }
+
+              const blob = await response.blob()
+              console.log("[WC] Found in Cache API:", fileId)
+
+              // Agregar a caché en memoria para acceso más rápido
+              if (blob.size < MAX_MEMORY_CACHE_SIZE) {
+                memoryCache.set(fileId, {
+                  blob,
+                  timestamp: Date.now(),
+                  size: blob.size,
+                })
+                memoryCacheSize += blob.size
+              }
+
+              pendingOperationsRef.current.delete(`get-${fileId}`)
+              return blob
+            }
+          } catch (error) {
+            console.error("[WC] Cache API retrieval failed:", error)
+          }
+        }
+
+        pendingOperationsRef.current.delete(`get-${fileId}`)
         return null
       } catch (error) {
+        console.error("[WC] Cache retrieval error:", error)
         pendingOperationsRef.current.delete(`get-${fileId}`)
-        // Error silencioso, retornar null
         return null
       }
     },
-    [isCacheApiAvailable, getCacheUrl],
+    [getIndexedDB, isCacheApiAvailable, getCacheUrl],
   )
 
-  // Cachear archivo (no bloquea el thread principal)
   const cacheFile = useCallback(
     async (fileId: string, blob: Blob) => {
       // Evitar operaciones duplicadas
       if (pendingOperationsRef.current.has(`set-${fileId}`)) {
+        console.log("[WC] Skipping duplicate cache operation for:", fileId)
         return
       }
 
       const blobSize = blob.size
 
-      // Usar requestIdleCallback para operaciones de caché (no bloquea UI)
       const performCache = async () => {
         try {
+          pendingOperationsRef.current.add(`set-${fileId}`)
+
           // 1. Agregar a caché en memoria si es pequeño
           if (blobSize < MAX_MEMORY_CACHE_SIZE / 2) {
             // Limpiar memoria si es necesario
-            while (
-              memoryCacheSize + blobSize > MAX_MEMORY_CACHE_SIZE &&
-              memoryCache.size > 0
-            ) {
+            while (memoryCacheSize + blobSize > MAX_MEMORY_CACHE_SIZE && memoryCache.size > 0) {
               let oldestKey: string | null = null
               let oldestTime = Date.now()
 
@@ -153,46 +269,87 @@ export function useMediaCache() {
               size: blobSize,
             })
             memoryCacheSize += blobSize
+            console.log("[WC] Added to memory cache:", fileId, `(${(blobSize / 1024 / 1024).toFixed(2)}MB)`)
           }
 
-          // 2. Intentar Cache API para persistencia
+          // 2. Guardar en IndexedDB para persistencia entre sesiones
+          const db = await getIndexedDB()
+          if (db) {
+            try {
+              const arrayBuffer = await blob.arrayBuffer()
+
+              const data = {
+                id: fileId,
+                data: arrayBuffer,
+                timestamp: Date.now(),
+                mimeType: blob.type || "application/octet-stream",
+                size: blobSize,
+              }
+
+              await new Promise<void>((resolve, reject) => {
+                try {
+                  const transaction = db.transaction([INDEXEDDB_STORE], "readwrite")
+                  const store = transaction.objectStore(INDEXEDDB_STORE)
+
+                  const request = store.put(data)
+
+                  request.onsuccess = () => {
+                    console.log("[WC] Saved to IndexedDB:", fileId, `(${(blobSize / 1024 / 1024).toFixed(2)}MB)`)
+                    resolve()
+                  }
+
+                  request.onerror = () => {
+                    console.error("[WC] IndexedDB save error:", request.error)
+                    reject(request.error)
+                  }
+
+                  transaction.onerror = () => {
+                    console.error("[WC] IndexedDB transaction error:", transaction.error)
+                    reject(transaction.error)
+                  }
+                } catch (error) {
+                  console.error("[WC] IndexedDB save failed:", error)
+                  reject(error)
+                }
+              })
+            } catch (error) {
+              console.error("[WC] IndexedDB operation failed:", error)
+            }
+          }
+
+          // 3. Intentar Cache API para redundancia
           if (isCacheApiAvailable()) {
-            pendingOperationsRef.current.add(`set-${fileId}`)
+            try {
+              const cache = await caches.open(CACHE_NAME)
+              const cacheUrl = getCacheUrl(fileId)
 
-            const cache = await caches.open(CACHE_NAME)
-            const cacheUrl = getCacheUrl(fileId)
+              const response = new Response(blob, {
+                headers: {
+                  "Content-Type": blob.type || "application/octet-stream",
+                  "X-Cache-Time": Date.now().toString(),
+                  "X-File-Size": blobSize.toString(),
+                },
+              })
 
-            // Crear Response con headers personalizados
-            const response = new Response(blob, {
-              headers: {
-                "Content-Type": blob.type || "application/octet-stream",
-                "X-Cache-Time": Date.now().toString(),
-                "X-File-Size": blobSize.toString(),
-              },
-            })
-
-            await cache.put(cacheUrl, response)
-            pendingOperationsRef.current.delete(`set-${fileId}`)
+              await cache.put(cacheUrl, response)
+              console.log("[WC] Saved to Cache API:", fileId, `(${(blobSize / 1024 / 1024).toFixed(2)}MB)`)
+            } catch (error) {
+              console.error("[WC] Cache API save failed:", error)
+            }
           }
-        } catch (error) {
+
           pendingOperationsRef.current.delete(`set-${fileId}`)
-          // Error silencioso
+        } catch (error) {
+          console.error("[WC] Cache operation error:", error)
+          pendingOperationsRef.current.delete(`set-${fileId}`)
         }
       }
 
-      // Usar requestIdleCallback si está disponible, sino setTimeout
-      if (typeof window !== "undefined" && "requestIdleCallback" in window) {
-        window.requestIdleCallback(() => {
-          performCache()
-        })
-      } else {
-        setTimeout(performCache, 0)
-      }
+      performCache()
     },
-    [isCacheApiAvailable, getCacheUrl],
+    [getIndexedDB, isCacheApiAvailable, getCacheUrl],
   )
 
-  // Eliminar archivo de la caché
   const deleteCachedFile = useCallback(
     async (fileId: string) => {
       try {
@@ -203,39 +360,86 @@ export function useMediaCache() {
           memoryCache.delete(fileId)
         }
 
+        // Eliminar de IndexedDB
+        const db = await getIndexedDB()
+        if (db) {
+          const transaction = db.transaction([INDEXEDDB_STORE], "readwrite")
+          const store = transaction.objectStore(INDEXEDDB_STORE)
+          store.delete(fileId)
+        }
+
         // Eliminar de Cache API
         if (isCacheApiAvailable()) {
           const cache = await caches.open(CACHE_NAME)
           const cacheUrl = getCacheUrl(fileId)
           await cache.delete(cacheUrl)
         }
-      } catch {
-        // Error silencioso
+
+        console.log("[WC] File deleted from cache:", fileId)
+      } catch (error) {
+        console.error("[WC] Cache deletion error:", error)
       }
     },
-    [isCacheApiAvailable, getCacheUrl],
+    [getIndexedDB, isCacheApiAvailable, getCacheUrl],
   )
 
-  // Limpiar caché completa
+  // Limpiar archivo de la caché
   const clearCache = useCallback(async () => {
     try {
       // Limpiar memoria
       memoryCache.clear()
       memoryCacheSize = 0
 
+      // Limpiar IndexedDB
+      const db = await getIndexedDB()
+      if (db) {
+        const transaction = db.transaction([INDEXEDDB_STORE], "readwrite")
+        const store = transaction.objectStore(INDEXEDDB_STORE)
+        store.clear()
+      }
+
       // Limpiar Cache API
       if (isCacheApiAvailable()) {
         await caches.delete(CACHE_NAME)
       }
-    } catch {
-      // Error silencioso
+
+      console.log("[WC] Cache cleared completely")
+    } catch (error) {
+      console.error("[WC] Cache clear error:", error)
     }
-  }, [isCacheApiAvailable])
+  }, [getIndexedDB, isCacheApiAvailable])
 
   // Obtener tamaño estimado de la caché
   const getCacheSize = useCallback(async (): Promise<number> => {
     try {
       let totalSize = memoryCacheSize
+
+      // Contar tamaño en IndexedDB
+      const db = await getIndexedDB()
+      if (db) {
+        totalSize += await new Promise<number>((resolve) => {
+          try {
+            const transaction = db.transaction([INDEXEDDB_STORE], "readonly")
+            const store = transaction.objectStore(INDEXEDDB_STORE)
+            const request = store.getAll()
+
+            request.onsuccess = () => {
+              let idbSize = 0
+              for (const item of request.result) {
+                if (item.data) {
+                  idbSize += item.size || 0
+                }
+              }
+              console.log("[WC] IndexedDB size:", `${(idbSize / 1024 / 1024).toFixed(2)}MB`)
+              resolve(idbSize)
+            }
+
+            request.onerror = () => resolve(0)
+          } catch {
+            resolve(0)
+          }
+        })
+      }
 
       if (isCacheApiAvailable()) {
         const cache = await caches.open(CACHE_NAME)
@@ -247,7 +451,7 @@ export function useMediaCache() {
             if (response) {
               const sizeHeader = response.headers.get("X-File-Size")
               if (sizeHeader) {
-                totalSize += parseInt(sizeHeader)
+                totalSize += Number.parseInt(sizeHeader)
               }
             }
           } catch {
@@ -256,11 +460,13 @@ export function useMediaCache() {
         }
       }
 
+      console.log("[WC] Total cache size:", `${(totalSize / 1024 / 1024).toFixed(2)}MB`)
       return totalSize
-    } catch {
+    } catch (error) {
+      console.error("[WC] Cache size calculation error:", error)
       return memoryCacheSize
     }
-  }, [isCacheApiAvailable])
+  }, [getIndexedDB, isCacheApiAvailable])
 
   // Limpiar caché expirada en segundo plano
   useEffect(() => {
@@ -268,37 +474,56 @@ export function useMediaCache() {
 
     const cleanExpiredCache = async () => {
       try {
-        if (!isCacheApiAvailable()) return
+        const db = await getIndexedDB()
+        if (db) {
+          const now = Date.now()
+          const transaction = db.transaction([INDEXEDDB_STORE], "readwrite")
+          const store = transaction.objectStore(INDEXEDDB_STORE)
+          const index = store.index("timestamp")
+          const range = IDBKeyRange.upperBound(now - MAX_CACHE_AGE)
 
-        const cache = await caches.open(CACHE_NAME)
-        const keys = await cache.keys()
-        const now = Date.now()
-
-        for (const request of keys) {
-          try {
-            const response = await cache.match(request)
-            if (response) {
-              const cachedTime = response.headers.get("X-Cache-Time")
-              if (cachedTime) {
-                const age = now - parseInt(cachedTime)
-                if (age > MAX_CACHE_AGE) {
-                  await cache.delete(request)
-                }
-              }
+          const request = index.openCursor(range)
+          request.onsuccess = (event) => {
+            const cursor = (event.target as IDBRequest).result
+            if (cursor) {
+              console.log("[WC] Deleting expired entry:", cursor.key)
+              store.delete(cursor.key)
+              cursor.continue()
             }
-          } catch {
-            // Ignorar errores individuales
           }
         }
-      } catch {
-        // Error silencioso
+
+        if (isCacheApiAvailable()) {
+          const cache = await caches.open(CACHE_NAME)
+          const keys = await cache.keys()
+          const now = Date.now()
+
+          for (const request of keys) {
+            try {
+              const response = await cache.match(request)
+              if (response) {
+                const cachedTime = response.headers.get("X-Cache-Time")
+                if (cachedTime) {
+                  const age = now - Number.parseInt(cachedTime)
+                  if (age > MAX_CACHE_AGE) {
+                    await cache.delete(request)
+                    console.log("[WC] Deleted expired cache:", request.url)
+                  }
+                }
+              }
+            } catch {
+              // Ignorar errores individuales
+            }
+          }
+        }
+      } catch (error) {
+        console.error("[WC] Expired cache cleanup error:", error)
       }
     }
 
-    // Limpiar caché expirada después de 5 segundos
     const timeoutId = setTimeout(cleanExpiredCache, 5000)
     return () => clearTimeout(timeoutId)
-  }, [isCacheApiAvailable])
+  }, [getIndexedDB, isCacheApiAvailable])
 
   return {
     getCachedFile,

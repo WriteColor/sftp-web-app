@@ -23,18 +23,80 @@ export function ImageZoomViewer({ src, alt, onClose, fileId, onLoadStart, onLoad
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 })
   const [isLoading, setIsLoading] = useState(true)
   const [hasError, setHasError] = useState(false)
-  const [isMobile, setIsMobile] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
-  const animationFrameRef = useRef<number | undefined>(undefined)
+  const touchStartDistanceRef = useRef(0)
+  const touchStartZoomRef = useRef(1)
 
-  // Detectar dispositivos móviles
-  useEffect(() => {
-    const checkMobile = () => {
-      setIsMobile(window.innerWidth < 768)
-    }
-    checkMobile()
-    window.addEventListener("resize", checkMobile)
-    return () => window.removeEventListener("resize", checkMobile)
+  const handleTouchStart = useCallback(
+    (e: React.TouchEvent<HTMLDivElement>) => {
+      if (e.touches.length === 2) {
+        // Pinch zoom
+        const touch1 = e.touches[0]
+        const touch2 = e.touches[1]
+        const distance = Math.hypot(touch2.clientX - touch1.clientX, touch2.clientY - touch1.clientY)
+        touchStartDistanceRef.current = distance
+        touchStartZoomRef.current = zoomLevel
+        e.preventDefault()
+      } else if (e.touches.length === 1 && zoomLevel > 1) {
+        // Single touch drag (solo si está zoomeado)
+        setIsDragging(true)
+        const touch = e.touches[0]
+        setDragStart({
+          x: touch.clientX - position.x,
+          y: touch.clientY - position.y,
+        })
+      }
+    },
+    [zoomLevel, position],
+  )
+
+  const handleTouchMove = useCallback(
+    (e: React.TouchEvent<HTMLDivElement>) => {
+      if (e.touches.length === 2) {
+        // Pinch zoom
+        const touch1 = e.touches[0]
+        const touch2 = e.touches[1]
+        const distance = Math.hypot(touch2.clientX - touch1.clientX, touch2.clientY - touch1.clientY)
+
+        if (touchStartDistanceRef.current > 0) {
+          const scale = distance / touchStartDistanceRef.current
+          const newZoom = Math.max(1, Math.min(5, touchStartZoomRef.current * scale))
+
+          setZoomLevel(newZoom)
+
+          // Auto-center when reaching 100% zoom
+          if (newZoom === 1) {
+            setPosition({ x: 0, y: 0 })
+          }
+        }
+
+        e.preventDefault()
+      } else if (isDragging && e.touches.length === 1 && zoomLevel > 1) {
+        // Single touch drag
+        const container = containerRef.current
+        if (!container) return
+
+        const touch = e.touches[0]
+        const rect = container.getBoundingClientRect()
+        const maxX = (rect.width * (zoomLevel - 1)) / 2
+        const maxY = (rect.height * (zoomLevel - 1)) / 2
+
+        let newX = touch.clientX - dragStart.x
+        let newY = touch.clientY - dragStart.y
+
+        newX = Math.max(-maxX, Math.min(maxX, newX))
+        newY = Math.max(-maxY, Math.min(maxY, newY))
+
+        setPosition({ x: newX, y: newY })
+        e.preventDefault()
+      }
+    },
+    [isDragging, zoomLevel, position, dragStart],
+  )
+
+  const handleTouchEnd = useCallback(() => {
+    setIsDragging(false)
+    touchStartDistanceRef.current = 0
   }, [])
 
   useEffect(() => {
@@ -43,8 +105,7 @@ export function ImageZoomViewer({ src, alt, onClose, fileId, onLoadStart, onLoad
     setIsDragging(false)
     setIsLoading(true)
     setHasError(false)
-    
-    // Notificar inicio de carga
+
     if (fileId && onLoadStart) {
       onLoadStart(fileId)
     }
@@ -53,8 +114,7 @@ export function ImageZoomViewer({ src, alt, onClose, fileId, onLoadStart, onLoad
   const handleImageLoad = () => {
     setIsLoading(false)
     setHasError(false)
-    
-    // Notificar fin de carga
+
     if (fileId && onLoadEnd) {
       onLoadEnd(fileId)
     }
@@ -63,8 +123,7 @@ export function ImageZoomViewer({ src, alt, onClose, fileId, onLoadStart, onLoad
   const handleImageError = () => {
     setIsLoading(false)
     setHasError(true)
-    
-    // Notificar fin de carga (aunque haya error)
+
     if (fileId && onLoadEnd) {
       onLoadEnd(fileId)
     }
@@ -76,7 +135,6 @@ export function ImageZoomViewer({ src, alt, onClose, fileId, onLoadStart, onLoad
     const container = containerRef.current
     if (!container) return
 
-    // Get mouse position relative to container
     const rect = container.getBoundingClientRect()
     const mouseX = e.clientX - rect.left - rect.width / 2
     const mouseY = e.clientY - rect.top - rect.height / 2
@@ -85,11 +143,10 @@ export function ImageZoomViewer({ src, alt, onClose, fileId, onLoadStart, onLoad
       const delta = e.deltaY > 0 ? -0.15 : 0.15
       const newZoom = Math.max(1, Math.min(5, prev + delta))
 
-      // If zooming out below previous level, gradually re-center the image
       if (newZoom < prev && newZoom > 1) {
         setPosition((currentPos) => {
           const totalDistance = Math.sqrt(currentPos.x ** 2 + currentPos.y ** 2)
-          const reductionFactor = (5 - newZoom) / 4 // Maps 1->1, 5->0
+          const reductionFactor = (5 - newZoom) / 4
           return {
             x: currentPos.x * (1 - reductionFactor * 0.3),
             y: currentPos.y * (1 - reductionFactor * 0.3),
@@ -97,7 +154,6 @@ export function ImageZoomViewer({ src, alt, onClose, fileId, onLoadStart, onLoad
         })
       }
 
-      // Auto-center when reaching 100% zoom
       if (newZoom === 1) {
         setPosition({ x: 0, y: 0 })
       }
@@ -156,7 +212,6 @@ export function ImageZoomViewer({ src, alt, onClose, fileId, onLoadStart, onLoad
       const newZoom = Math.max(1, prev - 0.25)
 
       if (newZoom < prev && newZoom > 1) {
-        // Gradual re-centering when zooming out
         setPosition((currentPos) => {
           const reductionFactor = (5 - newZoom) / 4
           return {
@@ -192,7 +247,6 @@ export function ImageZoomViewer({ src, alt, onClose, fileId, onLoadStart, onLoad
 
   return (
     <div className="relative w-full h-full flex flex-col bg-background">
-      {/* Loading spinner */}
       {isLoading && (
         <div className="absolute inset-0 flex items-center justify-center bg-background z-30">
           <div className="flex flex-col items-center gap-4">
@@ -204,13 +258,27 @@ export function ImageZoomViewer({ src, alt, onClose, fileId, onLoadStart, onLoad
 
       {/* Toolbar */}
       <div className="absolute right-1 top-1 z-10 flex gap-2 bg-background/80 backdrop-blur-sm rounded-lg p-2 shadow-lg">
-        <Button className="dark:text-white" variant="ghost" size="icon" onClick={zoomOut} disabled={zoomLevel <= 1} title="Alejar">
+        <Button
+          className="dark:text-white"
+          variant="ghost"
+          size="icon"
+          onClick={zoomOut}
+          disabled={zoomLevel <= 1}
+          title="Alejar"
+        >
           <ZoomOut className="h-4 w-4" />
         </Button>
         <div className="flex items-center px-3 text-sm font-medium min-w-[60px] justify-center">
           {Math.round(zoomLevel * 100)}%
         </div>
-        <Button className="dark:text-white" variant="ghost" size="icon" onClick={zoomIn} disabled={zoomLevel >= 5} title="Acercar">
+        <Button
+          className="dark:text-white"
+          variant="ghost"
+          size="icon"
+          onClick={zoomIn}
+          disabled={zoomLevel >= 5}
+          title="Acercar"
+        >
           <ZoomIn className="h-4 w-4" />
         </Button>
         <Button className="dark:text-white" variant="ghost" size="icon" onClick={resetZoom} title="Reiniciar">
@@ -226,13 +294,19 @@ export function ImageZoomViewer({ src, alt, onClose, fileId, onLoadStart, onLoad
       {/* Image container */}
       <div
         ref={containerRef}
-        className="flex-1 overflow-hidden relative flex items-center justify-center"
+        className="flex-1 overflow-hidden relative flex items-center justify-center touch-none"
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
         onMouseLeave={handleMouseUp}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
         style={{
           cursor: zoomLevel > 1 ? (isDragging ? "grabbing" : "grab") : "default",
+          WebkitTouchCallout: "none",
+          WebkitUserSelect: "none",
+          userSelect: "none",
         }}
       >
         <div

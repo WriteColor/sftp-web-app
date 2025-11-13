@@ -73,8 +73,12 @@ export function useImageStream({
     if (!fileId || !enabled) return
 
     // Cancelar petición anterior si existe
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort()
+    if (abortControllerRef.current && !abortControllerRef.current.signal.aborted) {
+      try {
+        abortControllerRef.current.abort()
+      } catch (error) {
+        console.log("[WC] Abort controller already aborted")
+      }
     }
 
     // NO limpiar blob URL aquí - solo al desmontar o cambiar de archivo
@@ -191,8 +195,13 @@ export function useImageStream({
 
     // Cleanup solo al desmontar completamente
     return () => {
-      if (abortControllerRef.current) {
-        abortControllerRef.current.abort()
+      if (abortControllerRef.current && !abortControllerRef.current.signal.aborted) {
+        try {
+          abortControllerRef.current.abort()
+        } catch (error) {
+          // Ignore abort errors
+          console.log("[WC] Abort controller error:", error)
+        }
       }
     }
   }, [fileId, cachedUrl, enabled, loadImage, cleanupBlobUrl])

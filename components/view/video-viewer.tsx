@@ -25,15 +25,22 @@ interface VideoViewerProps {
   onLoadEnd?: (fileId: string) => void
 }
 
-export function VideoViewer({ src, alt, poster, fileId, fileSize, tracks, onCached, onLoadStart, onLoadEnd }: VideoViewerProps) {
+export function VideoViewer({
+  src,
+  alt,
+  poster,
+  fileId,
+  fileSize,
+  tracks,
+  onCached,
+  onLoadStart,
+  onLoadEnd,
+}: VideoViewerProps) {
   const playerRef = useRef<any>(null)
 
-  // Detectar si es un archivo HLS (m3u8) o un video normal
-  const isHLS = src.endsWith('.m3u8') || src.includes('ik-master.m3u8')
-  // Detectar si el src ya es un blob URL (ya cacheado)
-  const isBlobUrl = src.startsWith('blob:')
+  const isHLS = src.endsWith(".m3u8") || src.includes("ik-master.m3u8")
+  const isBlobUrl = src.startsWith("blob:")
 
-  // Callbacks para el hook de streaming
   const handleLoadStart = useCallback(() => {
     if (fileId && onLoadStart) onLoadStart(fileId)
   }, [fileId, onLoadStart])
@@ -42,14 +49,16 @@ export function VideoViewer({ src, alt, poster, fileId, fileSize, tracks, onCach
     if (fileId && onLoadEnd) onLoadEnd(fileId)
   }, [fileId, onLoadEnd])
 
-  const handleCached = useCallback((id: string, blobUrl: string) => {
-    if (onCached) onCached(id, blobUrl)
-  }, [onCached])
+  const handleCached = useCallback(
+    (id: string, blobUrl: string) => {
+      if (onCached) onCached(id, blobUrl)
+    },
+    [onCached],
+  )
 
-  // Hook de streaming solo si no es HLS y no es blob URL
   const shouldUseStream = !isHLS && !isBlobUrl && fileId
   const videoStream = useVideoStream({
-    fileId: fileId || '',
+    fileId: fileId || "",
     fileSize,
     enabled: !!shouldUseStream,
     onLoadStart: handleLoadStart,
@@ -57,38 +66,38 @@ export function VideoViewer({ src, alt, poster, fileId, fileSize, tracks, onCach
     onCached: handleCached,
   })
 
-  // Determinar la URL final a usar
   const finalVideoSrc = shouldUseStream && videoStream.url ? videoStream.url : src
   const isLoading = shouldUseStream ? videoStream.isLoading : false
 
-  const videoJsOptions = finalVideoSrc ? {
-    controls: true,
-    responsive: true,
-    fluid: false, // Deshabilitado para control manual del tamaño
-    autoplay: false,
-    muted: false,
-    playbackRates: [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2],
-    sources: [
-      {
-        src: finalVideoSrc,
-        type: isHLS ? "application/x-mpegURL" : "video/mp4",
-      },
-    ],
-    poster: poster,
-    tracks: tracks,
-    html5: {
-      vhs: {
-        overrideNative: true,
-      },
-      nativeAudioTracks: false,
-      nativeVideoTracks: false,
-    },
-  } : null
+  const videoJsOptions = finalVideoSrc
+    ? {
+        controls: true,
+        responsive: true,
+        fluid: false,
+        autoplay: false,
+        muted: false,
+        playbackRates: [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2],
+        sources: [
+          {
+            src: finalVideoSrc,
+            type: isHLS ? "application/x-mpegURL" : "video/mp4",
+          },
+        ],
+        poster: poster,
+        tracks: tracks,
+        html5: {
+          vhs: {
+            overrideNative: true,
+          },
+          nativeAudioTracks: false,
+          nativeVideoTracks: false,
+        },
+      }
+    : null
 
   const handlePlayerReady = (player: any) => {
     playerRef.current = player
 
-    // Eventos del reproductor para mejorar UX
     player.on("waiting", () => {
       console.log("Player is waiting")
     })
@@ -115,7 +124,7 @@ export function VideoViewer({ src, alt, poster, fileId, fileSize, tracks, onCach
         </div>
       ) : (
         <div className="w-full h-full max-w-full max-h-full flex items-center justify-center">
-          <div className="relative w-full h-full" style={{ maxHeight: 'calc(100vh - 8rem)' }}>
+          <div className="relative w-full h-full" style={{ maxHeight: "calc(100vh - 8rem)" }}>
             <VideoJS options={videoJsOptions} onReady={handlePlayerReady} />
           </div>
         </div>

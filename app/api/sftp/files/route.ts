@@ -33,7 +33,17 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    return secureJsonResponse({ success: true, files: data })
+    // Filtrar archivos que tengan ID válido y file_path
+    const validFiles = (data || []).filter(file => 
+      file.id && 
+      file.file_path && 
+      file.filename && 
+      file.file_size > 0
+    )
+
+    console.log(`[WC] Returning ${validFiles.length} valid files (filtered from ${data?.length || 0})`)
+
+    return secureJsonResponse({ success: true, files: validFiles })
   } catch (error) {
     console.error("[WC] Error in files route:", error)
     return secureJsonResponse(

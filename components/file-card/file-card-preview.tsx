@@ -6,7 +6,7 @@ import { Play } from "lucide-react"
 import type { FileMetadata } from "@/lib/types"
 import { useImageStream } from "@/hooks/use-image-stream"
 import { useVideoStream } from "@/hooks/use-video-stream"
-import { FileCardSkeleton } from "@/components/file-card/file-card-skeleton"
+import { FileCardSkeleton } from "./file-card-skeleton"
 
 interface FileCardPreviewProps {
   file: FileMetadata
@@ -17,17 +17,21 @@ interface FileCardPreviewProps {
   onLoadEnd?: (fileId: string) => void
 }
 
-export function FileCardPreview({ file, cachedUrl, onClick, onCacheReady, onLoadStart, onLoadEnd }: FileCardPreviewProps) {
+export function FileCardPreview({
+  file,
+  cachedUrl,
+  onClick,
+  onCacheReady,
+  onLoadStart,
+  onLoadEnd,
+}: FileCardPreviewProps) {
   const [isLoading, setIsLoading] = useState(true)
   const [hasError, setHasError] = useState(false)
 
   const isVideo = file.mime_type?.startsWith("video/")
   const isAnimatedImage =
-    file.mime_type === "image/gif" ||
-    file.mime_type === "image/webp" ||
-    file.mime_type === "image/apng"
+    file.mime_type === "image/gif" || file.mime_type === "image/webp" || file.mime_type === "image/apng"
 
-  // Callbacks para el hook de streaming
   const handleLoadStartInternal = useCallback(() => {
     setIsLoading(true)
     if (file.id && onLoadStart) onLoadStart(file.id)
@@ -38,13 +42,15 @@ export function FileCardPreview({ file, cachedUrl, onClick, onCacheReady, onLoad
     if (file.id && onLoadEnd) onLoadEnd(file.id)
   }, [file.id, onLoadEnd])
 
-  const handleCached = useCallback((fileId: string, blobUrl: string) => {
-    if (onCacheReady) onCacheReady(fileId, blobUrl)
-  }, [onCacheReady])
+  const handleCached = useCallback(
+    (fileId: string, blobUrl: string) => {
+      if (onCacheReady) onCacheReady(fileId, blobUrl)
+    },
+    [onCacheReady],
+  )
 
-  // Hook para streaming de imágenes
   const imageStream = useImageStream({
-    fileId: file.id || '',
+    fileId: file.id || "",
     fileSize: file.file_size,
     enabled: !isVideo,
     cachedUrl,
@@ -53,9 +59,8 @@ export function FileCardPreview({ file, cachedUrl, onClick, onCacheReady, onLoad
     onCached: handleCached,
   })
 
-  // Hook para streaming de videos
   const videoStream = useVideoStream({
-    fileId: file.id || '',
+    fileId: file.id || "",
     fileSize: file.file_size,
     enabled: isVideo,
     onLoadStart: handleLoadStartInternal,
@@ -63,7 +68,6 @@ export function FileCardPreview({ file, cachedUrl, onClick, onCacheReady, onLoad
     onCached: handleCached,
   })
 
-  // Handlers para imagen/video
   const handleLoad = () => {
     setIsLoading(false)
     setHasError(false)
@@ -74,16 +78,11 @@ export function FileCardPreview({ file, cachedUrl, onClick, onCacheReady, onLoad
     setHasError(true)
   }
 
-  // Seleccionar URL según el tipo de medio
   const mediaUrl = isVideo ? videoStream.url : imageStream.url
   const finalUrl = mediaUrl || `/api/sftp/serve/${file.id}`
 
   return (
-    <div
-      className="aspect-square relative cursor-pointer overflow-hidden bg-muted group"
-      onClick={onClick}
-    >
-      {/* Video preview */}
+    <div className="aspect-square relative cursor-pointer overflow-hidden bg-muted group" onClick={onClick}>
       {isVideo ? (
         <>
           <video
@@ -98,7 +97,6 @@ export function FileCardPreview({ file, cachedUrl, onClick, onCacheReady, onLoad
             onLoadedData={handleLoad}
             onError={handleError}
           />
-          {/* Play icon overlay - siempre visible en hover */}
           <div className="absolute inset-0 flex items-center justify-center bg-black/0 group-hover:bg-black/30 transition-colors pointer-events-none z-10">
             <div className="bg-black/60 rounded-full p-2 opacity-60 group-hover:opacity-100 transition-opacity">
               <Play className="h-8 w-8 text-white fill-white" />
@@ -106,9 +104,8 @@ export function FileCardPreview({ file, cachedUrl, onClick, onCacheReady, onLoad
           </div>
         </>
       ) : (
-        /* Image preview */
         <Image
-          src={finalUrl}
+          src={finalUrl || "/placeholder.svg"}
           alt={file.original_filename}
           fill
           className={`object-cover transition-all duration-300 group-hover:scale-110 ${
@@ -122,14 +119,12 @@ export function FileCardPreview({ file, cachedUrl, onClick, onCacheReady, onLoad
         />
       )}
 
-      {/* Loading skeleton - Sobre todo el contenido */}
       {isLoading && (
         <div className="absolute inset-0 z-20">
           <FileCardSkeleton />
         </div>
       )}
 
-      {/* Error state */}
       {hasError && (
         <div className="absolute inset-0 flex items-center justify-center bg-muted text-muted-foreground text-xs z-20">
           Error al cargar

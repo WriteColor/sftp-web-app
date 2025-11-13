@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import Image from "next/image"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Download, Trash2, FileIcon, Check, Play } from "lucide-react"
 import { LineSpinner } from "@/components/ui/line-spinner"
@@ -89,7 +89,7 @@ export function FileCardWithPreview({
             {/* Preview de imagen */}
             {isImage && cachedUrl && (
               <Image
-                src={cachedUrl}
+                src={cachedUrl || "/placeholder.svg"}
                 alt={file.filename}
                 fill
                 className={`object-contain transition-opacity duration-300 ${

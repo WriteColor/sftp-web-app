@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react"
 import { SFTPConnectionButton } from "@/components/common/sftp-connection-button"
 import { FileUpload } from "@/components/common/file-upload"
-import { ImageGallery } from "@/components/view/image-gallery"
+import { ImageGallery } from "@/components/file-card/image-gallery" // Updated import path
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import type { SFTPConfig } from "@/lib/types"
 import { Upload, Images } from "lucide-react"
@@ -19,7 +19,7 @@ export default function Home() {
   // El servidor completará con las variables de entorno
   const sftpConfig: SFTPConfig = {
     host: process.env.NEXT_PUBLIC_SFTP_HOST || "",
-    port: parseInt(process.env.NEXT_PUBLIC_SFTP_PORT || "22"),
+    port: Number.parseInt(process.env.NEXT_PUBLIC_SFTP_PORT || "22"),
     username: process.env.NEXT_PUBLIC_SFTP_USERNAME || "",
     password: "", // Se completará en el servidor
   }
@@ -60,9 +60,11 @@ export default function Home() {
           <div className="mb-6 sm:mb-8 lg:mb-10">
             <div className="flex flex-col sm:flex-row items-start justify-between gap-4 mb-4 sm:mb-6">
               <div className="space-y-2 w-full">
-                <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold tracking-tight text-balance text-foreground">Cliente SFTP - Creado por Write_Color</h2>
+                <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold tracking-tight text-balance text-foreground">
+                  Cliente SFTP - Creado por Write_Color
+                </h2>
                 <p className="text-base sm:text-lg text-muted-foreground max-w-2xl">
-                  Suban cualquier webada que quiera, quiero ver que tienen pa compartir.
+                  Suban cualquier webada que quieraN, quiero ver que tienen pa compartir.
                 </p>
               </div>
             </div>
@@ -77,11 +79,17 @@ export default function Home() {
             {isConnected && (
               <Tabs defaultValue="upload" className="space-y-4 sm:space-y-6">
                 <TabsList className="grid w-full grid-cols-2 max-w-sm sm:max-w-md bg-muted p-1">
-                  <TabsTrigger value="upload" className="flex items-center gap-1 sm:gap-2 rounded-md text-xs sm:text-sm">
+                  <TabsTrigger
+                    value="upload"
+                    className="flex items-center gap-1 sm:gap-2 rounded-md text-xs sm:text-sm"
+                  >
                     <Upload className="h-4 w-4" />
                     <span className="hidden sm:inline">Subir</span>
                   </TabsTrigger>
-                  <TabsTrigger value="gallery" className="flex items-center gap-1 sm:gap-2 rounded-md text-xs sm:text-sm">
+                  <TabsTrigger
+                    value="gallery"
+                    className="flex items-center gap-1 sm:gap-2 rounded-md text-xs sm:text-sm"
+                  >
                     <Images className="h-4 w-4" />
                     <span className="hidden sm:inline">Galería</span>
                   </TabsTrigger>
