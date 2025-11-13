@@ -24,8 +24,31 @@ export function ImageZoomViewer({ src, alt, onClose, fileId, onLoadStart, onLoad
   const [isLoading, setIsLoading] = useState(true)
   const [hasError, setHasError] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
+  const imageRef = useRef<HTMLDivElement>(null)
   const touchStartDistanceRef = useRef(0)
   const touchStartZoomRef = useRef(1)
+  const rafRef = useRef<number | null>(null)
+  const lastUpdateTimeRef = useRef(0)
+  const boundingRectRef = useRef<DOMRect | null>(null)
+
+  // Actualizar bounding rect al cargar o redimensionar
+  useEffect(() => {
+    const updateBoundingRect = () => {
+      if (containerRef.current) {
+        boundingRectRef.current = containerRef.current.getBoundingClientRect()
+      }
+    }
+
+    updateBoundingRect()
+    window.addEventListener("resize", updateBoundingRect)
+
+    return () => {
+      window.removeEventListener("resize", updateBoundingRect)
+      if (rafRef.current) {
+        cancelAnimationFrame(rafRef.current)
+      }
+    }
+  }, [])
 
   const handleTouchStart = useCallback(
     (e: React.TouchEvent<HTMLDivElement>) => {
@@ -36,7 +59,6 @@ export function ImageZoomViewer({ src, alt, onClose, fileId, onLoadStart, onLoad
         const distance = Math.hypot(touch2.clientX - touch1.clientX, touch2.clientY - touch1.clientY)
         touchStartDistanceRef.current = distance
         touchStartZoomRef.current = zoomLevel
-        e.preventDefault()
       } else if (e.touches.length === 1 && zoomLevel > 1) {
         // Single touch drag (solo si está zoomeado)
         setIsDragging(true)
@@ -62,22 +84,31 @@ export function ImageZoomViewer({ src, alt, onClose, fileId, onLoadStart, onLoad
           const scale = distance / touchStartDistanceRef.current
           const newZoom = Math.max(1, Math.min(5, touchStartZoomRef.current * scale))
 
-          setZoomLevel(newZoom)
-
-          // Auto-center when reaching 100% zoom
-          if (newZoom === 1) {
-            setPosition({ x: 0, y: 0 })
+          // Throttle updates usando requestAnimationFrame
+          if (rafRef.current) {
+            cancelAnimationFrame(rafRef.current)
           }
-        }
 
-        e.preventDefault()
+          rafRef.current = requestAnimationFrame(() => {
+            setZoomLevel(newZoom)
+
+            // Auto-center when reaching 100% zoom
+            if (newZoom === 1) {
+              setPosition({ x: 0, y: 0 })
+            }
+          })
+        }
       } else if (isDragging && e.touches.length === 1 && zoomLevel > 1) {
-        // Single touch drag
-        const container = containerRef.current
-        if (!container) return
+        // Single touch drag con throttling
+        const now = performance.now()
+        if (now - lastUpdateTimeRef.current < 16) return // ~60fps max
+
+        lastUpdateTimeRef.current = now
+
+        const rect = boundingRectRef.current
+        if (!rect) return
 
         const touch = e.touches[0]
-        const rect = container.getBoundingClientRect()
         const maxX = (rect.width * (zoomLevel - 1)) / 2
         const maxY = (rect.height * (zoomLevel - 1)) / 2
 
@@ -87,17 +118,48 @@ export function ImageZoomViewer({ src, alt, onClose, fileId, onLoadStart, onLoad
         newX = Math.max(-maxX, Math.min(maxX, newX))
         newY = Math.max(-maxY, Math.min(maxY, newY))
 
-        setPosition({ x: newX, y: newY })
-        e.preventDefault()
+        if (rafRef.current) {
+          cancelAnimationFrame(rafRef.current)
+        }
+
+        rafRef.current = requestAnimationFrame(() => {
+          setPosition({ x: newX, y: newY })
+        })
       }
     },
-    [isDragging, zoomLevel, position, dragStart],
+    [isDragging, zoomLevel, dragStart],
   )
 
   const handleTouchEnd = useCallback(() => {
     setIsDragging(false)
     touchStartDistanceRef.current = 0
   }, [])
+
+  // Agregar event listeners de touch con passive: false
+  useEffect(() => {
+    const imageElement = imageRef.current
+    if (!imageElement) return
+
+    const handleTouchStartNative = (e: TouchEvent) => {
+      if (e.touches.length === 2 || (e.touches.length === 1 && zoomLevel > 1)) {
+        e.preventDefault()
+      }
+    }
+
+    const handleTouchMoveNative = (e: TouchEvent) => {
+      if (e.touches.length === 2 || (isDragging && e.touches.length === 1 && zoomLevel > 1)) {
+        e.preventDefault()
+      }
+    }
+
+    imageElement.addEventListener("touchstart", handleTouchStartNative, { passive: false })
+    imageElement.addEventListener("touchmove", handleTouchMoveNative, { passive: false })
+
+    return () => {
+      imageElement.removeEventListener("touchstart", handleTouchStartNative)
+      imageElement.removeEventListener("touchmove", handleTouchMoveNative)
+    }
+  }, [zoomLevel, isDragging])
 
   useEffect(() => {
     setZoomLevel(1)
@@ -177,15 +239,18 @@ export function ImageZoomViewer({ src, alt, onClose, fileId, onLoadStart, onLoad
         x: e.clientX - position.x,
         y: e.clientY - position.y,
       })
+      // Actualizar bounding rect al iniciar drag
+      if (containerRef.current) {
+        boundingRectRef.current = containerRef.current.getBoundingClientRect()
+      }
     }
   }
 
   const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
     if (isDragging && zoomLevel > 1) {
-      const container = containerRef.current
-      if (!container) return
+      const rect = boundingRectRef.current
+      if (!rect) return
 
-      const rect = container.getBoundingClientRect()
       const maxX = (rect.width * (zoomLevel - 1)) / 2
       const maxY = (rect.height * (zoomLevel - 1)) / 2
 
@@ -195,7 +260,14 @@ export function ImageZoomViewer({ src, alt, onClose, fileId, onLoadStart, onLoad
       newX = Math.max(-maxX, Math.min(maxX, newX))
       newY = Math.max(-maxY, Math.min(maxY, newY))
 
-      setPosition({ x: newX, y: newY })
+      // Throttle usando requestAnimationFrame
+      if (rafRef.current) {
+        cancelAnimationFrame(rafRef.current)
+      }
+
+      rafRef.current = requestAnimationFrame(() => {
+        setPosition({ x: newX, y: newY })
+      })
     }
   }
 
@@ -246,7 +318,7 @@ export function ImageZoomViewer({ src, alt, onClose, fileId, onLoadStart, onLoad
   }
 
   return (
-    <div className="relative w-full h-full flex flex-col bg-background">
+    <div className="relative w-full h-full max-w-full flex flex-col bg-background overflow-hidden">
       {isLoading && (
         <div className="absolute inset-0 flex items-center justify-center bg-background z-30">
           <div className="flex flex-col items-center gap-4">
@@ -257,7 +329,7 @@ export function ImageZoomViewer({ src, alt, onClose, fileId, onLoadStart, onLoad
       )}
 
       {/* Toolbar */}
-      <div className="absolute right-1 top-1 z-10 flex gap-2 bg-background/80 backdrop-blur-sm rounded-lg p-2 shadow-lg">
+      <div className="absolute left-1/2 -translate-x-1/2 top-1 z-10 flex gap-2 bg-background/80 backdrop-blur-sm rounded-lg p-2 shadow-lg max-w-[calc(100%-1rem)]">
         <Button
           className="dark:text-white"
           variant="ghost"
@@ -294,7 +366,7 @@ export function ImageZoomViewer({ src, alt, onClose, fileId, onLoadStart, onLoad
       {/* Image container */}
       <div
         ref={containerRef}
-        className="flex-1 overflow-hidden relative flex items-center justify-center touch-none"
+        className="flex-1 overflow-hidden relative flex items-center justify-center touch-none max-w-full"
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
@@ -310,6 +382,7 @@ export function ImageZoomViewer({ src, alt, onClose, fileId, onLoadStart, onLoad
         }}
       >
         <div
+          ref={imageRef}
           className="relative"
           style={{
             transform: `translate(${position.x}px, ${position.y}px) scale(${zoomLevel})`,
@@ -320,6 +393,7 @@ export function ImageZoomViewer({ src, alt, onClose, fileId, onLoadStart, onLoad
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
+            willChange: isDragging ? "transform" : "auto",
           }}
         >
           <div className="relative w-full h-full max-w-full max-h-full">

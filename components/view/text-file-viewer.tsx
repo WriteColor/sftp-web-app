@@ -107,7 +107,7 @@ export function TextFileViewer({ src, filename }: TextFileViewerProps) {
   }
 
   return (
-    <div className="relative w-full h-full flex flex-col bg-background">
+    <div className="relative w-full h-full max-w-full flex flex-col bg-background overflow-hidden">
       {/* Toolbar */}
       <div className="absolute right-9.5 z-10 flex gap-2 bg-background/80 backdrop-blur-sm rounded-bl-lg p-2 shadow-lg">
         <Button variant="ghost" size="icon" onClick={handleCopy} title="Copiar contenido">
@@ -121,7 +121,7 @@ export function TextFileViewer({ src, filename }: TextFileViewerProps) {
       </div>
 
       {/* Text content - scrollable with proper formatting */}
-      <div className="flex-1 overflow-auto p-6 pt-0">
+      <div className="flex-1 overflow-auto p-6 pt-0 max-w-full">
         {isMarkdown ? (
           <div
             className="prose prose-sm dark:prose-invert max-w-none text-foreground"

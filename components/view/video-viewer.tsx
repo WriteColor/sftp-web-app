@@ -116,7 +116,7 @@ export function VideoViewer({
   }
 
   return (
-    <div className="relative w-full h-full flex items-center justify-center bg-background p-4 overflow-hidden">
+    <div className="relative w-full h-full max-w-full flex items-center justify-center bg-background p-4 overflow-hidden">
       {isLoading || !videoJsOptions ? (
         <div className="flex flex-col items-center justify-center gap-4">
           <LineSpinner size="lg" color="primary" />
@@ -124,7 +124,7 @@ export function VideoViewer({
         </div>
       ) : (
         <div className="w-full h-full max-w-full max-h-full flex items-center justify-center">
-          <div className="relative w-full h-full" style={{ maxHeight: "calc(100vh - 8rem)" }}>
+          <div className="relative w-full h-full max-w-full" style={{ maxHeight: "calc(100vh - 8rem)" }}>
             <VideoJS options={videoJsOptions} onReady={handlePlayerReady} />
           </div>
         </div>

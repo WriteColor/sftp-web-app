@@ -486,15 +486,17 @@ export function ImageGallery({ sftpConfig, uploadBatchId }: ImageGalleryProps) {
           )}
 
           <Dialog open={!!selectedImage} onOpenChange={() => setSelectedImage(null)}>
-            <DialogContent className="max-w-[95vw] max-h-[95vh] p-0 gap-0">
-              <DialogHeader className="p-3 sm:p-4 pb-2 sm:pb-3 md:p-6 md:pb-0 border-b border-border sr-only">
-                <DialogTitle className="sr-only">{selectedImage?.original_filename}</DialogTitle>
-                <DialogDescription className="sr-only">
+            <DialogContent className="max-w-[95vw] max-h-[95vh] p-0 overflow-hidden">
+              <DialogHeader className="p-4 pb-2 md:p-6 md:pb-0 min-w-0">
+                <DialogTitle className="truncate text-sm md:text-base pr-8 min-w-0" title={selectedImage?.original_filename}>
+                  {selectedImage?.original_filename}
+                </DialogTitle>
+                <DialogDescription className="text-xs md:text-sm truncate min-w-0">
                   {selectedImage &&
                     `${formatFileSize(selectedImage.file_size)} • ${formatDate(selectedImage.uploaded_at || "")}`}
                 </DialogDescription>
               </DialogHeader>
-              <div className="h-[calc(95vh-60px)] sm:h-[calc(95vh-80px)] md:h-[calc(95vh-120px)]">
+              <div className="h-[calc(95vh-100px)] md:h-[calc(95vh-120px)] overflow-hidden">
                 {selectedImage && (
                   <MediaViewer
                     src={cachedUrls.get(selectedImage.id!) || `/api/sftp/serve/${selectedImage.id}`}

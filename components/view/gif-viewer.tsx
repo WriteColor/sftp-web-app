@@ -50,7 +50,7 @@ export function GifViewer({ src, alt }: GifViewerProps) {
   }
 
   return (
-    <div className="relative w-full h-full flex flex-col bg-background">
+    <div className="relative w-full h-full max-w-full flex flex-col bg-background overflow-hidden">
       {/* Loading spinner */}
       {isLoading && (
         <div className="absolute inset-0 flex items-center justify-center bg-background z-30">
@@ -71,7 +71,7 @@ export function GifViewer({ src, alt }: GifViewerProps) {
       </div>
 
       {/* GIF container */}
-      <div className="flex-1 overflow-hidden relative flex items-center justify-center">
+      <div className="flex-1 overflow-hidden relative flex items-center justify-center max-w-full">
         <img
           ref={imgRef}
           src={src || "/placeholder.svg"}

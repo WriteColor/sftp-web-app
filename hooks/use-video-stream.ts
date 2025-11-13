@@ -106,7 +106,6 @@ export function useVideoStream({
 
       // Combinar chunks en un solo blob
       const blob = new Blob(chunks, { type: response.headers.get("content-type") || "video/mp4" })
-      console.log("[WC] Downloaded video:", fileId, `(${(blob.size / 1024 / 1024).toFixed(2)}MB)`)
 
       return blob
     } catch (error) {
@@ -136,7 +135,6 @@ export function useVideoStream({
       const cachedBlob = await getCachedFile(fileId)
 
       if (cachedBlob) {
-        console.log("[WC] Using cached video:", fileId)
         if (!blobUrlRef.current || blobUrlRef.current === "") {
           const blobUrl = URL.createObjectURL(cachedBlob)
           blobUrlRef.current = blobUrl
@@ -165,7 +163,6 @@ export function useVideoStream({
 
       if (shouldCache && !isLargeFile) {
         // Descargar y cachear archivos pequeños/medianos
-        console.log("[WC] Downloading and caching video:", fileId)
         const blob = await downloadWithProgress(fileId, abortControllerRef.current.signal)
 
         if (blob) {
@@ -185,7 +182,6 @@ export function useVideoStream({
         }
       } else {
         console.log(
-          "[WC] Using server streaming for large video:",
           fileId,
           `(${fileSize ? (fileSize / 1024 / 1024).toFixed(2) : "?"}MB)`,
         )
