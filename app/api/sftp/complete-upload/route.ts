@@ -2,29 +2,18 @@ import { type NextRequest, NextResponse } from "next/server"
 import { createSFTPConnection } from "@/lib/sftp-settings/sftp-client"
 import { createServerClient } from "@/lib/supabase/server"
 import type { SFTPConfig, FileMetadata } from "@/lib/types"
-import type { SupabaseClient } from "@supabase/supabase-js"
 import { randomBytes } from "crypto"
 import path from "path"
 import { validateSFTPConfig, sanitizeFilename } from "@/lib/sftp-settings/validation"
 import { rateLimit } from "@/lib/sftp-settings/rate-limit"
 import { getServerSFTPConfig } from "@/lib/sftp-settings/sftp-config"
 import { secureJsonResponse, isValidUUID } from "@/lib/security"
+import { readFile, unlink, readdir } from "fs/promises"
+import { join } from "path"
+import { tmpdir } from "os"
 
+const TEMP_DIR = join(tmpdir(), "sftp-chunks")
 const MAX_FILE_SIZE = 500 * 1024 * 1024 // 500MB
-
-// Helper para limpiar chunks temporales de Supabase
-async function cleanupSupabaseChunks(supabase: SupabaseClient, uploadId: string, totalChunks: number) {
-  try {
-    const filesToDelete = []
-    for (let i = 0; i < totalChunks; i++) {
-      filesToDelete.push(`${uploadId}_chunk_${i}`)
-    }
-    await supabase.storage.from('chunks-temp').remove(filesToDelete)
-    console.log(`[Complete Upload] Limpiados ${filesToDelete.length} chunks temporales`)
-  } catch (error) {
-    console.error("[Complete Upload] Error limpiando chunks:", error)
-  }
-}
 
 // Timeout amplio para finalización (ensamblar chunks y subir)
 export const maxDuration = 60 // 60 segundos
@@ -44,9 +33,6 @@ export async function POST(request: NextRequest) {
   let sftp: any = null
 
   try {
-    // Obtener cliente de Supabase al inicio
-    const supabase = await createServerClient()
-
     const ip = request.headers.get("x-forwarded-for") || request.headers.get("x-real-ip") || "unknown"
     // Rate limit generoso para finalizaciones: 30 archivos por minuto
     // Permite múltiples archivos grandes simultáneos + reintentos automáticos
@@ -91,36 +77,20 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Ensamblar chunks en orden desde Supabase Storage
+    // Ensamblar chunks en orden
     const chunks: Buffer[] = []
     let totalSize = 0
 
-    console.log(`[Complete Upload] Descargando ${totalChunks} chunks desde Supabase...`)
-
     for (let i = 0; i < totalChunks; i++) {
-      const chunkFileName = `${uploadId}_chunk_${i}`
+      const chunkPath = join(TEMP_DIR, `${uploadId}_chunk_${i}`)
       
       try {
-        const { data: chunkData, error: downloadError } = await supabase.storage
-          .from('chunks-temp')
-          .download(chunkFileName)
-
-        if (downloadError || !chunkData) {
-          console.error(`[Complete Upload] Error descargando chunk ${i}:`, downloadError)
-          // Intentar limpiar chunks existentes
-          await cleanupSupabaseChunks(supabase, uploadId, totalChunks)
-          return secureJsonResponse(
-            { success: false, message: `Chunk ${i} faltante o corrupto` },
-            { status: 400 }
-          )
-        }
-
-        const chunkBuffer = Buffer.from(await chunkData.arrayBuffer())
+        const chunkBuffer = await readFile(chunkPath)
         chunks.push(chunkBuffer)
         totalSize += chunkBuffer.length
       } catch (error) {
-        console.error(`[Complete Upload] Error procesando chunk ${i}:`, error)
-        await cleanupSupabaseChunks(supabase, uploadId, totalChunks)
+        // Limpiar chunks existentes
+        await cleanupChunks(uploadId, totalChunks)
         return secureJsonResponse(
           { success: false, message: `Chunk ${i} faltante o corrupto` },
           { status: 400 }
@@ -130,7 +100,7 @@ export async function POST(request: NextRequest) {
 
     // Verificar que el tamaño coincida
     if (totalSize !== fileSize) {
-      await cleanupSupabaseChunks(supabase, uploadId, totalChunks)
+      await cleanupChunks(uploadId, totalChunks)
       return secureJsonResponse(
         { 
           success: false, 
@@ -176,18 +146,19 @@ export async function POST(request: NextRequest) {
       metadata.upload_batch_id = uploadBatchId
     }
 
-    const { data, error } = await supabase.from("files").insert(metadata).select().single()
+    const supabase = await createServerClient()
+    const { data, error } = await supabase.from("sftp_files").insert(metadata).select().single()
 
     if (error) {
-      console.error("[Complete Upload] Error guardando metadata:", error)
+      console.error("[WC] Error saving file metadata:", error)
       // Intentar eliminar el archivo del SFTP si falló la metadata
       try {
         await sftp.delete(remotePath)
       } catch (e) {
-        console.error("[Complete Upload] Error eliminando archivo de SFTP:", e)
+        console.error("[WC] Error deleting file from SFTP after metadata failure:", e)
       }
       
-      await cleanupSupabaseChunks(supabase, uploadId, totalChunks)
+      await cleanupChunks(uploadId, totalChunks)
       await sftp.end()
       
       return secureJsonResponse(
@@ -199,8 +170,8 @@ export async function POST(request: NextRequest) {
     // Cerrar conexión SFTP
     await sftp.end()
 
-    // Limpiar chunks temporales de Supabase
-    await cleanupSupabaseChunks(supabase, uploadId, totalChunks)
+    // Limpiar chunks temporales
+    await cleanupChunks(uploadId, totalChunks)
 
     return secureJsonResponse({
       success: true,
@@ -228,4 +199,22 @@ export async function POST(request: NextRequest) {
   }
 }
 
-
+// Función auxiliar para limpiar chunks
+async function cleanupChunks(uploadId: string, totalChunks: number): Promise<void> {
+  try {
+    const files = await readdir(TEMP_DIR)
+    const chunkFiles = files.filter(f => f.startsWith(`${uploadId}_chunk_`))
+    
+    await Promise.all(
+      chunkFiles.map(async (file) => {
+        try {
+          await unlink(join(TEMP_DIR, file))
+        } catch (e) {
+          console.error(`[WC] Error deleting chunk ${file}:`, e)
+        }
+      })
+    )
+  } catch (error) {
+    console.error("[WC] Error cleaning up chunks:", error)
+  }
+}

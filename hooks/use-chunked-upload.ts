@@ -46,7 +46,7 @@ export function useChunkedUpload() {
       const totalChunks = Math.ceil(file.size / CHUNK_SIZE)
       onProgress?.(0, `Preparando subida (${totalChunks} partes)...`)
 
-      // Subir cada chunk individualmente a Supabase Storage (temporal)
+      // Subir cada chunk
       for (let chunkIndex = 0; chunkIndex < totalChunks; chunkIndex++) {
         // Verificar si se canceló
         if (abortController.signal.aborted) {
@@ -108,17 +108,10 @@ export function useChunkedUpload() {
       })
 
       if (!completeResponse.ok) {
-        let errorMessage = "Error al subir archivo"
-        try {
-          const error = await completeResponse.json()
-          errorMessage = error.message || errorMessage
-        } catch {
-          errorMessage = `Error ${completeResponse.status}: ${completeResponse.statusText}`
-        }
-        throw new Error(errorMessage)
+        const error = await completeResponse.json()
+        throw new Error(error.message || "Error al finalizar subida")
       }
 
-      onProgress?.(90, "Finalizando...")
       const result = await completeResponse.json()
       onProgress?.(100, "¡Completado!")
 
