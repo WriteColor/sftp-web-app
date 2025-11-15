@@ -163,6 +163,7 @@ export function useVideoStream({
 
       if (shouldCache && !isLargeFile) {
         // Descargar y cachear archivos pequeños/medianos
+        console.log("[WC] Downloading and caching video:", fileId)
         const blob = await downloadWithProgress(fileId, abortControllerRef.current.signal)
 
         if (blob) {
@@ -181,10 +182,6 @@ export function useVideoStream({
           }
         }
       } else {
-        console.log(
-          fileId,
-          `(${fileSize ? (fileSize / 1024 / 1024).toFixed(2) : "?"}MB)`,
-        )
         const serverUrl = `/api/sftp/serve/${fileId}`
         setUrl(serverUrl)
         setProgress(100)

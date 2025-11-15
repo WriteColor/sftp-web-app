@@ -30,7 +30,7 @@ async function initIndexedDB(): Promise<IDBDatabase | null> {
       const request = window.indexedDB.open(INDEXEDDB_NAME, 1)
 
       request.onerror = () => {
-        console.error("IndexedDB error:", request.error)
+        console.error("[WC] IndexedDB error:", request.error)
         resolve(null)
       }
 
@@ -46,7 +46,7 @@ async function initIndexedDB(): Promise<IDBDatabase | null> {
         }
       }
     } catch (error) {
-      console.error("IndexedDB initialization error:", error)
+      console.error("[WC] IndexedDB initialization error:", error)
       resolve(null)
     }
   })
@@ -116,7 +116,7 @@ export function useMediaCache() {
           }
         }
 
-        // 2. Buscar en IndexedDB (persistencia única)
+        // 2. Intentar IndexedDB (persistencia)
         const db = await getIndexedDB()
         if (db) {
           try {
@@ -132,20 +132,10 @@ export function useMediaCache() {
                     const age = Date.now() - result.timestamp
                     if (age < MAX_CACHE_AGE) {
                       const blobData = result.data
+                      // Intentar reconstruir el blob con el tipo MIME correcto
                       const reconstructedBlob = new Blob([blobData], {
                         type: result.mimeType || "application/octet-stream",
                       })
-                      
-                      // Agregar a caché en memoria para acceso más rápido
-                      if (reconstructedBlob.size < MAX_MEMORY_CACHE_SIZE / 2) {
-                        memoryCache.set(fileId, {
-                          blob: reconstructedBlob,
-                          timestamp: Date.now(),
-                          size: reconstructedBlob.size,
-                        })
-                        memoryCacheSize += reconstructedBlob.size
-                      }
-                      
                       resolve(reconstructedBlob)
                       return
                     } else {
@@ -153,17 +143,18 @@ export function useMediaCache() {
                       const deleteTransaction = db.transaction([INDEXEDDB_STORE], "readwrite")
                       const deleteStore = deleteTransaction.objectStore(INDEXEDDB_STORE)
                       deleteStore.delete(fileId)
+                      console.log("[WC] Expired entry removed from IndexedDB:", fileId)
                     }
                   }
                   resolve(null)
                 }
 
                 request.onerror = () => {
-                  console.error("IndexedDB read error:", request.error)
+                  console.error("[WC] IndexedDB read error:", request.error)
                   resolve(null)
                 }
               } catch (error) {
-                console.error("IndexedDB transaction error:", error)
+                console.error("[WC] IndexedDB transaction error:", error)
                 resolve(null)
               }
             })
@@ -173,7 +164,47 @@ export function useMediaCache() {
               return blob
             }
           } catch (error) {
-            console.error("IndexedDB retrieval failed:", error)
+            console.error("[WC] IndexedDB retrieval failed:", error)
+          }
+        }
+
+        // 3. Intentar Cache API si está disponible
+        if (isCacheApiAvailable()) {
+          try {
+            const cache = await caches.open(CACHE_NAME)
+            const cacheUrl = getCacheUrl(fileId)
+            const response = await cache.match(cacheUrl)
+
+            if (response) {
+              const cachedTime = response.headers.get("X-Cache-Time")
+              if (cachedTime) {
+                const age = Date.now() - Number.parseInt(cachedTime)
+                if (age > MAX_CACHE_AGE) {
+                  // Expirado, eliminar
+                  await cache.delete(cacheUrl)
+                  console.log("[WC] Expired entry removed from Cache API:", fileId)
+                  pendingOperationsRef.current.delete(`get-${fileId}`)
+                  return null
+                }
+              }
+
+              const blob = await response.blob()
+
+              // Agregar a caché en memoria para acceso más rápido
+              if (blob.size < MAX_MEMORY_CACHE_SIZE) {
+                memoryCache.set(fileId, {
+                  blob,
+                  timestamp: Date.now(),
+                  size: blob.size,
+                })
+                memoryCacheSize += blob.size
+              }
+
+              pendingOperationsRef.current.delete(`get-${fileId}`)
+              return blob
+            }
+          } catch (error) {
+            console.error("[WC] Cache API retrieval failed:", error)
           }
         }
 
@@ -185,14 +216,13 @@ export function useMediaCache() {
         return null
       }
     },
-    [getIndexedDB],
+    [getIndexedDB, isCacheApiAvailable, getCacheUrl],
   )
 
   const cacheFile = useCallback(
     async (fileId: string, blob: Blob) => {
       // Evitar operaciones duplicadas
       if (pendingOperationsRef.current.has(`set-${fileId}`)) {
-        console.log("[WC] Skipping duplicate cache operation for:", fileId)
         return
       }
 
@@ -235,7 +265,7 @@ export function useMediaCache() {
             memoryCacheSize += blobSize
           }
 
-          // 2. Guardar en IndexedDB para persistencia (única fuente de caché persistente)
+          // 2. Guardar en IndexedDB para persistencia entre sesiones
           const db = await getIndexedDB()
           if (db) {
             try {
@@ -279,6 +309,26 @@ export function useMediaCache() {
             }
           }
 
+          // 3. Intentar Cache API para redundancia
+          if (isCacheApiAvailable()) {
+            try {
+              const cache = await caches.open(CACHE_NAME)
+              const cacheUrl = getCacheUrl(fileId)
+
+              const response = new Response(blob, {
+                headers: {
+                  "Content-Type": blob.type || "application/octet-stream",
+                  "X-Cache-Time": Date.now().toString(),
+                  "X-File-Size": blobSize.toString(),
+                },
+              })
+
+              await cache.put(cacheUrl, response)
+            } catch (error) {
+              console.error("[WC] Cache API save failed:", error)
+            }
+          }
+
           pendingOperationsRef.current.delete(`set-${fileId}`)
         } catch (error) {
           console.error("[WC] Cache operation error:", error)
@@ -288,7 +338,7 @@ export function useMediaCache() {
 
       performCache()
     },
-    [getIndexedDB],
+    [getIndexedDB, isCacheApiAvailable, getCacheUrl],
   )
 
   const deleteCachedFile = useCallback(
@@ -309,12 +359,18 @@ export function useMediaCache() {
           store.delete(fileId)
         }
 
-        console.log("[WC] File deleted from cache:", fileId)
+        // Eliminar de Cache API
+        if (isCacheApiAvailable()) {
+          const cache = await caches.open(CACHE_NAME)
+          const cacheUrl = getCacheUrl(fileId)
+          await cache.delete(cacheUrl)
+        }
+
       } catch (error) {
         console.error("[WC] Cache deletion error:", error)
       }
     },
-    [getIndexedDB],
+    [getIndexedDB, isCacheApiAvailable, getCacheUrl],
   )
 
   // Limpiar archivo de la caché
@@ -332,11 +388,15 @@ export function useMediaCache() {
         store.clear()
       }
 
-      console.log("[WC] Cache cleared completely")
+      // Limpiar Cache API
+      if (isCacheApiAvailable()) {
+        await caches.delete(CACHE_NAME)
+      }
+
     } catch (error) {
       console.error("[WC] Cache clear error:", error)
     }
-  }, [getIndexedDB])
+  }, [getIndexedDB, isCacheApiAvailable])
 
   // Obtener tamaño estimado de la caché
   const getCacheSize = useCallback(async (): Promise<number> => {
@@ -370,13 +430,31 @@ export function useMediaCache() {
         })
       }
 
-      console.log("[WC] Total cache size:", `${(totalSize / 1024 / 1024).toFixed(2)}MB`)
+      if (isCacheApiAvailable()) {
+        const cache = await caches.open(CACHE_NAME)
+        const keys = await cache.keys()
+
+        for (const request of keys) {
+          try {
+            const response = await cache.match(request)
+            if (response) {
+              const sizeHeader = response.headers.get("X-File-Size")
+              if (sizeHeader) {
+                totalSize += Number.parseInt(sizeHeader)
+              }
+            }
+          } catch {
+            // Ignorar errores individuales
+          }
+        }
+      }
+
       return totalSize
     } catch (error) {
       console.error("[WC] Cache size calculation error:", error)
       return memoryCacheSize
     }
-  }, [getIndexedDB])
+  }, [getIndexedDB, isCacheApiAvailable])
 
   // Limpiar caché expirada en segundo plano
   useEffect(() => {
@@ -402,6 +480,30 @@ export function useMediaCache() {
             }
           }
         }
+
+        if (isCacheApiAvailable()) {
+          const cache = await caches.open(CACHE_NAME)
+          const keys = await cache.keys()
+          const now = Date.now()
+
+          for (const request of keys) {
+            try {
+              const response = await cache.match(request)
+              if (response) {
+                const cachedTime = response.headers.get("X-Cache-Time")
+                if (cachedTime) {
+                  const age = now - Number.parseInt(cachedTime)
+                  if (age > MAX_CACHE_AGE) {
+                    await cache.delete(request)
+                    console.log("[WC] Deleted expired cache:", request.url)
+                  }
+                }
+              }
+            } catch {
+              // Ignorar errores individuales
+            }
+          }
+        }
       } catch (error) {
         console.error("[WC] Expired cache cleanup error:", error)
       }
@@ -409,7 +511,7 @@ export function useMediaCache() {
 
     const timeoutId = setTimeout(cleanExpiredCache, 5000)
     return () => clearTimeout(timeoutId)
-  }, [getIndexedDB])
+  }, [getIndexedDB, isCacheApiAvailable])
 
   return {
     getCachedFile,
