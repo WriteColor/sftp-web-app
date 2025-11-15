@@ -1,14 +1,9 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { randomBytes } from "crypto"
 import { rateLimit } from "@/lib/sftp-settings/rate-limit"
 import { secureJsonResponse } from "@/lib/security"
-import { writeFile, mkdir } from "fs/promises"
-import { join } from "path"
-import { tmpdir } from "os"
-import { cleanupOldChunks } from "@/lib/chunk-cleanup"
+import { createServerClient } from "@/lib/supabase/server"
 
 const MAX_CHUNK_SIZE = 4.5 * 1024 * 1024 // 4.5MB por chunk (límite de Vercel/Next.js)
-const TEMP_DIR = join(tmpdir(), "sftp-chunks")
 
 // Timeout corto para cada chunk - debe completarse rápido
 export const maxDuration = 30 // 30 segundos por chunk
@@ -31,9 +26,6 @@ interface ChunkMetadata {
 
 export async function POST(request: NextRequest) {
   try {
-    // Limpiar chunks antiguos periódicamente
-    cleanupOldChunks().catch(console.error)
-
     const ip = request.headers.get("x-forwarded-for") || request.headers.get("x-real-ip") || "unknown"
     // Rate limit generoso para chunks: 150 chunks por minuto (suficiente para archivos de 500MB)
     // Un archivo de 500MB = 125 chunks, por eso 150 es seguro
@@ -65,15 +57,25 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Crear directorio temporal si no existe
-    await mkdir(TEMP_DIR, { recursive: true })
-
-    // Guardar chunk en sistema de archivos temporal
-    const chunkPath = join(TEMP_DIR, `${metadata.uploadId}_chunk_${metadata.chunkIndex}`)
+    // Guardar chunk en Supabase Storage (temporal)
+    const supabase = await createServerClient()
+    const chunkFileName = `${metadata.uploadId}_chunk_${metadata.chunkIndex}`
     const arrayBuffer = await chunk.arrayBuffer()
-    const buffer = Buffer.from(arrayBuffer)
     
-    await writeFile(chunkPath, buffer)
+    const { error: uploadError } = await supabase.storage
+      .from('chunks-temp')
+      .upload(chunkFileName, arrayBuffer, {
+        contentType: 'application/octet-stream',
+        upsert: true,
+      })
+
+    if (uploadError) {
+      console.error("[Upload Chunk] Error subiendo a Supabase:", uploadError)
+      return secureJsonResponse(
+        { success: false, message: "Error al guardar chunk temporalmente" },
+        { status: 500 }
+      )
+    }
 
     return secureJsonResponse({
       success: true,
@@ -81,7 +83,7 @@ export async function POST(request: NextRequest) {
       chunkIndex: metadata.chunkIndex,
     })
   } catch (error) {
-    console.error("[WC] Error in upload-chunk route:", error)
+    console.error("[Upload Chunk] Error:", error)
     return secureJsonResponse(
       {
         success: false,

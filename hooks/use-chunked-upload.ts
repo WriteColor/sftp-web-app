@@ -42,49 +42,68 @@ export function useChunkedUpload() {
         return await uploadSmallFile({ file, config, uploadBatchId, onProgress })
       }
 
-      // Para archivos grandes, usar chunked upload con streaming directo
+      // Para archivos grandes, usar chunked upload
       const totalChunks = Math.ceil(file.size / CHUNK_SIZE)
       onProgress?.(0, `Preparando subida (${totalChunks} partes)...`)
 
-      // Dividir archivo en chunks y subirlos secuencialmente
-      // En Vercel, usamos un enfoque de streaming directo para evitar
-      // problemas de persistencia de archivos temporales entre funciones
-      const chunks: Blob[] = []
-      
+      // Subir cada chunk individualmente a Supabase Storage (temporal)
       for (let chunkIndex = 0; chunkIndex < totalChunks; chunkIndex++) {
+        // Verificar si se canceló
+        if (abortController.signal.aborted) {
+          throw new Error("Subida cancelada")
+        }
+
         const start = chunkIndex * CHUNK_SIZE
         const end = Math.min(start + CHUNK_SIZE, file.size)
-        chunks.push(file.slice(start, end))
-        
-        const progress = Math.round(((chunkIndex + 1) / totalChunks) * 30)
-        onProgress?.(progress, `Preparando parte ${chunkIndex + 1}/${totalChunks}...`)
+        const chunk = file.slice(start, end)
+
+        const formData = new FormData()
+        formData.append("chunk", chunk)
+        formData.append(
+          "metadata",
+          JSON.stringify({
+            uploadId,
+            chunkIndex,
+            totalChunks,
+            fileName: file.name,
+            fileSize: file.size,
+            mimeType: file.type,
+          })
+        )
+
+        const response = await fetch("/api/sftp/upload-chunk", {
+          method: "POST",
+          body: formData,
+          signal: abortController.signal,
+        })
+
+        if (!response.ok) {
+          const error = await response.json()
+          throw new Error(error.message || `Error subiendo parte ${chunkIndex + 1}`)
+        }
+
+        // Calcular progreso (dar 90% al upload de chunks, 10% a la finalización)
+        const progress = Math.round(((chunkIndex + 1) / totalChunks) * 90)
+        onProgress?.(progress, `Subiendo parte ${chunkIndex + 1}/${totalChunks}...`)
       }
 
-      // Subir todos los chunks en una sola llamada usando FormData
-      onProgress?.(30, "Subiendo archivo...")
-      
-      const formData = new FormData()
-      
-      // Agregar cada chunk como un archivo separado
-      chunks.forEach((chunk, index) => {
-        formData.append(`chunk_${index}`, chunk, `chunk_${index}`)
-      })
-      
-      // Agregar metadata
-      formData.append("metadata", JSON.stringify({
-        uploadId,
-        fileName: file.name,
-        fileSize: file.size,
-        mimeType: file.type,
-        totalChunks,
-        config,
-        uploadBatchId,
-      }))
+      // Finalizar upload y ensamblar archivo en el servidor
+      onProgress?.(90, "Finalizando subida...")
 
-      // Enviar todo en una sola llamada con streaming
-      const completeResponse = await fetch("/api/sftp/upload-stream", {
+      const completeResponse = await fetch("/api/sftp/complete-upload", {
         method: "POST",
-        body: formData,
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          uploadId,
+          fileName: file.name,
+          fileSize: file.size,
+          mimeType: file.type,
+          totalChunks,
+          config,
+          uploadBatchId,
+        }),
         signal: abortController.signal,
       })
 
