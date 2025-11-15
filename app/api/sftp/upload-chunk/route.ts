@@ -7,7 +7,7 @@ import { join } from "path"
 import { tmpdir } from "os"
 import { cleanupOldChunks } from "@/lib/chunk-cleanup"
 
-const MAX_CHUNK_SIZE = 10 * 1024 * 1024 // 10MB por chunk
+const MAX_CHUNK_SIZE = 4.5 * 1024 * 1024 // 4.5MB por chunk (límite de Vercel/Next.js)
 const TEMP_DIR = join(tmpdir(), "sftp-chunks")
 
 // Timeout corto para cada chunk - debe completarse rápido
@@ -16,6 +16,9 @@ export const dynamic = 'force-dynamic'
 
 // Configuración para permitir body grande
 export const runtime = 'nodejs'
+
+// IMPORTANTE: En Next.js 15+, el límite de body está en serverActions.bodySizeLimit (next.config.mjs)
+// Vercel tiene un límite de 4.5MB para requests, por eso usamos chunks de 4MB
 
 interface ChunkMetadata {
   uploadId: string
@@ -32,7 +35,9 @@ export async function POST(request: NextRequest) {
     cleanupOldChunks().catch(console.error)
 
     const ip = request.headers.get("x-forwarded-for") || request.headers.get("x-real-ip") || "unknown"
-    if (!rateLimit(ip, 30, 60000)) { // 30 chunks por minuto max
+    // Rate limit generoso para chunks: 150 chunks por minuto (suficiente para archivos de 500MB)
+    // Un archivo de 500MB = 125 chunks, por eso 150 es seguro
+    if (!rateLimit(ip, 150, 60000)) {
       return secureJsonResponse(
         { success: false, message: "Demasiadas solicitudes. Intenta más tarde." },
         { status: 429 }

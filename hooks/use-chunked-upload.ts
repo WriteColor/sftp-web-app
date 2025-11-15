@@ -4,7 +4,7 @@ import { useCallback, useRef } from "react"
 import type { SFTPConfig, FileMetadata } from "@/lib/types"
 import { v4 as uuidv4 } from "uuid"
 
-const CHUNK_SIZE = 5 * 1024 * 1024 // 5MB por chunk
+const CHUNK_SIZE = 4 * 1024 * 1024 // 4MB por chunk (límite seguro para Vercel)
 const LARGE_FILE_THRESHOLD = 15 * 1024 * 1024 // 15MB - archivos mayores usan chunked upload
 
 interface ChunkedUploadOptions {

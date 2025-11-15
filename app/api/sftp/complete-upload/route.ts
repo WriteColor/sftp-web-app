@@ -34,7 +34,9 @@ export async function POST(request: NextRequest) {
 
   try {
     const ip = request.headers.get("x-forwarded-for") || request.headers.get("x-real-ip") || "unknown"
-    if (!rateLimit(ip, 5, 60000)) { // 5 finalizaciones por minuto max
+    // Rate limit generoso para finalizaciones: 30 archivos por minuto
+    // Permite múltiples archivos grandes simultáneos + reintentos automáticos
+    if (!rateLimit(ip, 30, 60000)) {
       return secureJsonResponse(
         { success: false, message: "Demasiadas solicitudes. Intenta más tarde." },
         { status: 429 }
