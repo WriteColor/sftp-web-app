@@ -12,11 +12,11 @@ import Image from "next/image"
 import { MediaViewer } from "../view/media-viewer"
 import { UploadProgressItem } from "./upload-progress-item"
 import { sanitizeFile } from "@/lib/file-sanitizer"
-import { uploadFilesAction } from "@/app/actions/upload"
+import { useChunkedUpload } from "@/hooks/use-chunked-upload"
 
 const MAX_FILE_SIZE = 500 * 1024 * 1024 // 500MB
 const MAX_FILES = 20
-const LIGHT_FILE_THRESHOLD = 100 * 1024 * 1024 // 100MB (archivos menores se procesan más rápido)
+const LIGHT_FILE_THRESHOLD = 15 * 1024 * 1024 // 15MB - archivos menores usan upload tradicional
 
 interface FileWithPreview extends File {
   preview?: string
@@ -34,6 +34,7 @@ export function FileUpload({ sftpConfig, onUploadComplete, uploadBatchId, existi
   const [uploading, setUploading] = useState(false)
   const [previewImage, setPreviewImage] = useState<{ src: string; name: string; mimeType: string } | null>(null)
   const uploadingFilesRef = useRef<Map<string, boolean>>(new Map())
+  const { uploadFile } = useChunkedUpload()
 
   const onDrop = useCallback(
     async (acceptedFiles: File[], rejectedFiles: any[]) => {
@@ -136,30 +137,24 @@ export function FileUpload({ sftpConfig, onUploadComplete, uploadBatchId, existi
         }),
       )
 
-      // Simular progreso para archivos grandes (Server Actions no soportan progreso real de upload)
-      let simulatedProgress = 0
-      const progressInterval = setInterval(() => {
-        simulatedProgress = Math.min(simulatedProgress + Math.random() * 15, 90)
-        window.dispatchEvent(
-          new CustomEvent("fileProgress", {
-            detail: {
-              fileName: file.name,
-              progress: Math.round(simulatedProgress),
-              status: "uploading",
-              statusMessage: `Subiendo... ${Math.round(simulatedProgress)}%`,
-            },
-          }),
-        )
-      }, 1000)
-
-      const formData = new FormData()
-      formData.append("files", file)
-      formData.append("config", JSON.stringify(sftpConfig))
-
-      // Usar Server Action en lugar de fetch/XMLHttpRequest
-      const result = await uploadFilesAction(formData)
-
-      clearInterval(progressInterval)
+      // Usar chunked upload con progreso real
+      const result = await uploadFile({
+        file,
+        config: sftpConfig,
+        uploadBatchId,
+        onProgress: (progress, status) => {
+          window.dispatchEvent(
+            new CustomEvent("fileProgress", {
+              detail: {
+                fileName: file.name,
+                progress,
+                status: "uploading",
+                statusMessage: status,
+              },
+            }),
+          )
+        },
+      })
 
       if (result.success) {
         window.dispatchEvent(

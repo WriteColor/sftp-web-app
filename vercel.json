@@ -1,5 +1,16 @@
 {
   "buildCommand": "next build",
   "framework": "nextjs",
-  "outputDirectory": ".next"
+  "outputDirectory": ".next",
+  "functions": {
+    "app/api/sftp/upload-chunk/route.ts": {
+      "maxDuration": 30
+    },
+    "app/api/sftp/complete-upload/route.ts": {
+      "maxDuration": 60
+    },
+    "app/api/sftp/upload/route.ts": {
+      "maxDuration": 60
+    }
+  }
 }
